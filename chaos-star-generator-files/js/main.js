@@ -2,7 +2,6 @@ import { PARAM_DEFS, GRADIENT_TYPES, getDefaults, generateRandomParams } from '.
 import { StarRenderer } from './star-renderer.js';
 import { Tweener } from './animation.js';
 import { GradientEditor } from './gradient-editor.js';
-import { exportPNG } from './export.js';
 import { buildShareUrl, loadFromUrl, syncUrl, endSession } from './url-codec.js';
 import { textureManager, SAMPLE_TEXTURES } from './texture-manager.js';
 
@@ -231,7 +230,7 @@ function setupCanvasTap() {
     const movedToo = moved(x, y);
     if (movedToo) return; // drag, ignore
     if (dt >= LONG_PRESS_MS || longPressReady) {
-      saveToPhotos(); // call synchronously inside the up-handler
+      saveOrShareImage(); // call synchronously inside the up-handler
     } else {
       generateOneRandomStar();
     }
@@ -269,7 +268,11 @@ function setupCanvasTap() {
   canvas.addEventListener('touchcancel', cancel);
 }
 
-async function saveToPhotos() {
+function isTouchDevice() {
+  return window.matchMedia('(pointer: coarse)').matches;
+}
+
+async function saveOrShareImage() {
   const transparent = document.getElementById('chooseTransparent')?.checked ?? false;
   const offscreen = renderer.renderExport(params, !transparent);
 
@@ -277,9 +280,8 @@ async function saveToPhotos() {
     if (!blob) return;
     const file = new File([blob], 'chaos-star.png', { type: 'image/png' });
 
-    // Web Share API w/ files: on iOS opens the share sheet (with "Save Image"),
-    // on Android opens the picker (with "Save to Photos" via the gallery).
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    // Touch devices (phones/tablets): open share sheet → Save to Photos / share
+    if (isTouchDevice() && navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
         await navigator.share({
           files: [file],
@@ -293,7 +295,7 @@ async function saveToPhotos() {
       }
     }
 
-    // Fallback: trigger a download
+    // Desktop (or share unavailable): plain download to disk
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -707,10 +709,7 @@ function wireActionsTab() {
   });
 
   document.getElementById('reRandom').addEventListener('click', toggleInspire);
-  document.getElementById('saveIt').addEventListener('click', () => {
-    const transparent = document.getElementById('chooseTransparent').checked;
-    exportPNG(renderer, params, !transparent);
-  });
+  document.getElementById('saveIt').addEventListener('click', saveOrShareImage);
   document.getElementById('copyUrlBtn').addEventListener('click', copyShareUrl);
   document.getElementById('goFullScreen').addEventListener('click', toggleFullscreen);
 
