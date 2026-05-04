@@ -223,50 +223,115 @@ function setupCanvasTap() {
     return dx >= TAP_TOLERANCE || dy >= TAP_TOLERANCE;
   }
 
-  function onUp(x, y) {
+  // Double-tap detection (touch only). We detect on the SECOND touchstart
+  // so that the pending random-tap timer is cancelled before it can fire,
+  // even for slower natural double-taps (~300ms between releases).
+  const DOUBLE_TAP_MS = 350;
+  let lastTapEndTime = 0;
+  let pendingTapTimer = null;
+  let isDoubleTap = false;
+
+  function maybeStartDoubleTap() {
+    if (pendingTapTimer && performance.now() - lastTapEndTime < DOUBLE_TAP_MS) {
+      clearTimeout(pendingTapTimer);
+      pendingTapTimer = null;
+      isDoubleTap = true;
+    } else {
+      isDoubleTap = false;
+    }
+  }
+
+  function onUp(x, y, isTouch) {
     clearTimeout(feedbackTimer);
     feedbackTimer = null;
     if (cancelled) return;
     const dt = performance.now() - downTime;
     const movedToo = moved(x, y);
-    if (movedToo) return; // drag, ignore
+    if (movedToo) { isDoubleTap = false; return; }
     if (dt >= LONG_PRESS_MS || longPressReady) {
+      longPressReady = false;
+      isDoubleTap = false;
       saveOrShareImage(); // call synchronously inside the up-handler
-    } else {
-      generateOneRandomStar();
+      return;
     }
     longPressReady = false;
+
+    // Desktop click: fire random immediately, no delay.
+    if (!isTouch) {
+      generateOneRandomStar();
+      return;
+    }
+
+    // Touch: if the second touchstart already flagged a double-tap, run it.
+    if (isDoubleTap) {
+      isDoubleTap = false;
+      toggleControls();
+      return;
+    }
+    // Otherwise schedule a single-tap action; a fast follow-up touchstart
+    // will cancel this and switch to double-tap mode.
+    lastTapEndTime = performance.now();
+    pendingTapTimer = setTimeout(() => {
+      pendingTapTimer = null;
+      generateOneRandomStar();
+    }, DOUBLE_TAP_MS);
+  }
+
+  // iOS Safari fires synthetic mouse events ~300ms after touchend. Track
+  // the last touch and ignore mouse events for a short window so they
+  // don't double-trigger our handlers (e.g. firing random right after the
+  // user double-tapped, defeating the double-tap-to-toggle gesture).
+  let lastTouchTs = 0;
+  function isMouseSynthetic() {
+    return performance.now() - lastTouchTs < 500;
   }
 
   // ---- Mouse ----
-  canvas.addEventListener('mousedown', (e) => onDown(e.clientX, e.clientY));
+  canvas.addEventListener('mousedown', (e) => {
+    if (isMouseSynthetic()) return;
+    onDown(e.clientX, e.clientY);
+  });
   canvas.addEventListener('mousemove', (e) => {
+    if (isMouseSynthetic()) return;
     if (feedbackTimer && moved(e.clientX, e.clientY)) cancel();
   });
-  canvas.addEventListener('mouseup', (e) => onUp(e.clientX, e.clientY));
+  canvas.addEventListener('mouseup', (e) => {
+    if (isMouseSynthetic()) return;
+    onUp(e.clientX, e.clientY, false);
+  });
   canvas.addEventListener('mouseleave', cancel);
 
   // ---- Touch ----
   canvas.addEventListener('touchstart', (e) => {
+    lastTouchTs = performance.now();
     if (e.touches.length > 1) { multiTouch = true; cancel(); return; }
     multiTouch = false;
+    // If a single-tap is pending and this start is within the double-tap
+    // window, intercept it here — cancels the pending random and tells
+    // the upcoming touchend to toggle controls instead.
+    maybeStartDoubleTap();
     onDown(e.touches[0].clientX, e.touches[0].clientY);
   }, { passive: true });
   canvas.addEventListener('touchmove', (e) => {
+    lastTouchTs = performance.now();
     if (e.touches.length !== 1) { cancel(); return; }
     const t = e.touches[0];
     if (feedbackTimer && moved(t.clientX, t.clientY)) cancel();
   }, { passive: true });
   canvas.addEventListener('touchend', (e) => {
+    lastTouchTs = performance.now();
     if (multiTouch || e.touches.length > 0) {
       multiTouch = false;
       cancel();
       return;
     }
     const t = e.changedTouches[0];
-    onUp(t.clientX, t.clientY);
+    onUp(t.clientX, t.clientY, true);
   });
-  canvas.addEventListener('touchcancel', cancel);
+  canvas.addEventListener('touchcancel', (e) => {
+    lastTouchTs = performance.now();
+    cancel();
+  });
 }
 
 function isTouchDevice() {
