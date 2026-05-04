@@ -110,7 +110,11 @@ export function syncUrl(params, { mode = 'auto' } = {}) {
     window.history.replaceState(null, '', url);
   }
   clearTimeout(sessionTimer);
-  sessionTimer = setTimeout(() => { inSession = false; }, 1000);
+  // Within this window any further auto-mode write replaces the entry rather
+  // than pushing a new one. Combined with the 1s debounce in main.js this lets
+  // an edit session of any length collapse into ONE history entry — the user
+  // has to be idle for ~3s for the next change to start a new entry.
+  sessionTimer = setTimeout(() => { inSession = false; }, 3000);
 }
 
 export function endSession() {

@@ -105,8 +105,9 @@ function tweenScaleTo(target) {
     },
   });
 
-  // URL reflects the target (final) value, not the animating value
-  syncUrl({ ...params, globalScale: target });
+  // Debounce URL — by the time it fires (1s) the GSAP tween is long done
+  // and params.globalScale equals the target, so the URL reflects the final value.
+  scheduleUrlSync();
 }
 
 function adjustScale(delta) {
@@ -312,6 +313,8 @@ function setupHistory() {
   window.addEventListener('popstate', () => {
     const newParams = loadFromUrl();
     if (!newParams) return;
+    // Drop any pending debounced write — we're navigating, not editing.
+    cancelUrlSync();
     const merged = { ...getDefaults(), ...newParams };
     if (inspireActive) stopInspire();
     tweener.transitionTo(params, merged, 600);
@@ -801,18 +804,38 @@ function onParamChange() {
   scheduleUrlSync();
 }
 
-// Write URL synchronously on every change. The session logic in url-codec
-// pushes only the first event in a session and replaceStates the rest, so
-// rapid drags don't pollute history while keeping URL always in sync —
-// otherwise pressing Back from a not-yet-pushed state lands on the wrong page.
+// Debounced URL update — wait until the user has been idle for 1s before
+// writing to history. A continuous edit session collapses into ONE history
+// entry rather than spamming pushState/replaceState as the user drags.
+const URL_SYNC_DEBOUNCE_MS = 1000;
+let urlSyncTimer = null;
+
 function scheduleUrlSync() {
-  if (urlSyncRaf) return;
-  urlSyncRaf = requestAnimationFrame(() => {
-    urlSyncRaf = null;
+  clearTimeout(urlSyncTimer);
+  urlSyncTimer = setTimeout(() => {
+    urlSyncTimer = null;
     syncUrl(params);
-  });
+  }, URL_SYNC_DEBOUNCE_MS);
 }
-let urlSyncRaf = null;
+
+function flushUrlSync() {
+  if (!urlSyncTimer) return;
+  clearTimeout(urlSyncTimer);
+  urlSyncTimer = null;
+  syncUrl(params);
+}
+
+function cancelUrlSync() {
+  clearTimeout(urlSyncTimer);
+  urlSyncTimer = null;
+}
+
+// Flush any pending URL update before the page navigates away or hides,
+// so the current state is in history when the user comes back via Back.
+window.addEventListener('pagehide', flushUrlSync);
+window.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushUrlSync();
+});
 
 /* ---------- Inspire mode ---------- */
 
@@ -855,14 +878,11 @@ function nextInspiration() {
   tweener.transitionTo(params, target, inspireSpeed);
   inspireTimer = setTimeout(() => {
     syncControlsFromParams();
-    // First inspire iteration pushes a new history entry so user can navigate
-    // back to the pre-inspire state. Subsequent iterations only replace.
-    if (firstInspireIteration) {
-      syncUrl(params, { mode: 'push' });
-      firstInspireIteration = false;
-    } else {
-      syncUrl(params, { mode: 'replace' });
-    }
+    // Push every iteration as its own history entry so the user can walk
+    // back through the random designs they saw. Each iteration only
+    // creates ONE entry (called once after the transition completes).
+    syncUrl(params, { mode: 'push' });
+    firstInspireIteration = false;
     nextInspiration();
   }, inspireSpeed + 50);
 }
