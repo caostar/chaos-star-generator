@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Chaos Star Generator</title>
+  <meta name="description" content="Generate your own Chaos Star or just get some random inspiration.">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+</head>
+<body>
+  <canvas id="starCanvas" width="1024" height="768"></canvas>
+
+  <!-- Controls panel -->
+  <div id="controls-panel" class="cp-panel">
+    <div class="cp-tab" id="cpTabHeader">
+      <span class="cp-tab-icon">✷</span>
+      <span class="cp-tab-label">Chaos Star Generator</span>
+      <span class="cp-tab-status" id="cpStatus">●</span>
+      <button class="cp-help-btn" id="cpHelp" title="What is this?">?</button>
+    </div>
+    <div class="cp-body" id="cpBody">
+      <!-- Tabs -->
+      <div class="ctrl-tabs">
+        <button class="ctrl-tab active" data-tab="shape">Shape</button>
+        <button class="ctrl-tab" data-tab="colors">Colors</button>
+        <button class="ctrl-tab" data-tab="actions">Actions</button>
+      </div>
+
+      <!-- Tab content containers -->
+      <div class="ctrl-tab-content active" data-content="shape" id="tabShape"></div>
+      <div class="ctrl-tab-content" data-content="colors" id="tabColors"></div>
+      <div class="ctrl-tab-content" data-content="actions" id="tabActions">
+        <button class="cp-btn cp-btn-start" id="reRandom">⟳ Inspire me randomly</button>
+        <div class="cs-row">
+          <div class="cs-label">Transition (ms)</div>
+          <div class="cs-slider-wrap">
+            <input type="range" id="speedSlider" class="cs-slider" min="100" max="3000" step="50" value="1700">
+            <span class="cs-val" id="speedVal">1700</span>
+          </div>
+        </div>
+        <div style="height:8px"></div>
+        <button class="cp-btn" id="saveIt" style="width:100%; margin-bottom:6px;">↓ Save PNG</button>
+        <label class="cs-toggle-wrap" style="margin-bottom:10px; gap:8px;">
+          <input type="checkbox" id="chooseTransparent" class="cs-toggle" checked>
+          <span class="cs-toggle-indicator"></span>
+          <span style="font-size:10px; color:#aaa;">Transparent background</span>
+        </label>
+        <button class="cp-btn" id="copyUrlBtn" style="width:100%; margin-bottom:6px;">⌘ Copy share URL</button>
+        <button class="cp-btn hiddenOnMobile" id="goFullScreen" style="width:100%;">⛶ Full screen</button>
+
+        <div class="ctrl-keys" style="margin-top:14px;">
+          <div class="ctrl-key-row"><kbd>Space</kbd><span>Generate a random one</span></div>
+          <div class="ctrl-key-row"><kbd>R</kbd><span>Toggle inspire</span></div>
+          <div class="ctrl-key-row"><kbd>F</kbd><span>Full screen</span></div>
+          <div class="ctrl-key-row"><kbd>H</kbd><span>Hide controls</span></div>
+          <div class="ctrl-key-row"><kbd>Esc</kbd><span>Exit / stop</span></div>
+          <div class="ctrl-key-row"><kbd>⌘ /Wheel</kbd><span>Zoom star</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="bottomInfos">
+    <span class="simpleText">Chaos Star Generator</span>
+  </div>
+
+  <div id="toast"></div>
+
+  <div id="welcome-modal" style="display:none;">
+    <div class="wm-card">
+      <button class="wm-close" id="wmClose" aria-label="Close">×</button>
+      <h2 class="wm-title">Chaos Star Generator</h2>
+      <p class="wm-subtitle">
+        Eight arrows radiating from a center — endless variations of color, geometry, and rotation.
+        Build, share, or just watch.
+      </p>
+
+      <div class="wm-actions">
+        <button class="wm-btn wm-btn-stream" data-action="inspire">
+          <span class="wm-btn-icon">⟳</span>
+          <span class="wm-btn-label">Inspire Me</span>
+          <span class="wm-btn-desc">Auto-generate stars in a loop</span>
+        </button>
+        <button class="wm-btn wm-btn-hand" data-action="random">
+          <span class="wm-btn-icon">✷</span>
+          <span class="wm-btn-label">New Random</span>
+          <span class="wm-btn-desc">Generate one new design</span>
+        </button>
+        <button class="wm-btn wm-btn-random" data-action="customize">
+          <span class="wm-btn-icon">⚙</span>
+          <span class="wm-btn-label">Customize</span>
+          <span class="wm-btn-desc">Tweak every parameter</span>
+        </button>
+      </div>
+
+      <div class="wm-divider"></div>
+
+      <div class="wm-featured">
+        <div class="wm-feat">
+          Press <kbd>Space</kbd> for a fresh design
+        </div>
+      </div>
+
+      <div class="wm-sections">
+        <div class="wm-section">
+          <h3>Controls</h3>
+          <div class="wm-keys">
+            <div class="wm-key-row"><kbd>Space</kbd><span>Generate a random one</span></div>
+            <div class="wm-key-row"><kbd>R</kbd><span>Toggle inspire loop</span></div>
+            <div class="wm-key-row"><kbd>F</kbd><span>Full screen</span></div>
+            <div class="wm-key-row"><kbd>H</kbd><span>Hide all controls</span></div>
+            <div class="wm-key-row"><kbd>Esc</kbd><span>Exit / stop loop</span></div>
+            <div class="wm-key-row"><kbd>⌘ ±</kbd><span>Zoom star in / out</span></div>
+            <div class="wm-key-row"><kbd>Wheel</kbd><span>Zoom star</span></div>
+            <div class="wm-key-row"><kbd>Pinch</kbd><span>Zoom (mobile)</span></div>
+          </div>
+        </div>
+        <div class="wm-section">
+          <h3>Features</h3>
+          <div class="wm-keys">
+            <div class="wm-key-row"><span>↗</span><span>Share via URL</span></div>
+            <div class="wm-key-row"><span>↓</span><span>Export as PNG</span></div>
+            <div class="wm-key-row"><span>←</span><span>Browser back/forward</span></div>
+            <div class="wm-key-row"><span>↻</span><span>Smooth transitions</span></div>
+          </div>
+        </div>
+      </div>
+
+      <p class="wm-footer">Inspired by the Symbol of Chaos — eight arrows, infinite worlds.</p>
+      <div class="wm-links">
+        <p>
+          <a href="https://caostar.com/thoughts" target="_blank" rel="noopener">Know more: https://caostar.com/thoughts ↗</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
