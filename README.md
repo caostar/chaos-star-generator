@@ -29,7 +29,7 @@
 
 ## Magickal use
 
-Beyond being a beautiful creative tool, the Chaos Star Generator can also serve as a powerful magickal tool. Here's a fun experiment:
+Beyond being a creative tool, the Chaos Star Generator can also serve as a magickal instrument. Here's a fun experiment:
 
 1. Upload a texture with a sigil placed at the exact center of the image. Like this one, included on the sample textures:
 
