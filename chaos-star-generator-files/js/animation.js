@@ -1,8 +1,9 @@
 import { hexToHsl, hslToHex } from './parameters.js';
 
 const PARAM_KEYS = [
-  'centerRadius', 'barWidth', 'barLength', 'barSidesAngle',
+  'globalScale', 'centerRadius', 'barWidth', 'barLength', 'barSidesAngle',
   'tipWidth', 'tipLength', 'tipBottomAngle', 'gradientRotation',
+  'textureScale', 'textureOffsetX', 'textureOffsetY',
 ];
 
 export class Tweener {

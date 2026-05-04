@@ -2,10 +2,55 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="color-scheme" content="dark">
+
   <title>Chaos Star Generator</title>
   <meta name="description" content="Generate your own Chaos Star or just get some random inspiration.">
-  <link rel="stylesheet" href="css/styles.css">
+  <meta name="application-name" content="Chaos Star">
+
+  <!-- PWA / Add to Home Screen -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Chaos Star">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <!-- Icons -->
+  <link rel="icon" type="image/png" href="chaos-star-generator-files/assets/160x160.png">
+  <link rel="shortcut icon" href="chaos-star-generator-files/assets/160x160.png">
+  <link rel="apple-touch-icon" sizes="57x57" href="chaos-star-generator-files/assets/57x57.png">
+  <link rel="apple-touch-icon" sizes="72x72" href="chaos-star-generator-files/assets/72x72.png">
+  <link rel="apple-touch-icon" sizes="114x114" href="chaos-star-generator-files/assets/114x114.png">
+  <link rel="apple-touch-icon" sizes="160x160" href="chaos-star-generator-files/assets/160x160.png">
+  <link rel="apple-touch-icon" href="chaos-star-generator-files/assets/160x160.png">
+  <link rel="apple-touch-startup-image" href="chaos-star-generator-files/assets/startup.png">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://caostar.com/">
+  <meta property="og:title" content="Chaos Star Generator">
+  <meta property="og:description" content="Generate your own Chaos Star or just get some random inspiration.">
+  <meta property="og:image" content="chaos-star-generator-files/assets/160x160.png">
+  <meta property="og:image:width" content="160">
+  <meta property="og:image:height" content="160">
+  <meta property="og:image:alt" content="Chaos Star icon">
+  <meta property="fb:app_id" content="547136968660417">
+
+  <!-- Twitter card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Chaos Star Generator">
+  <meta name="twitter:description" content="Generate your own Chaos Star or just get some random inspiration.">
+  <meta name="twitter:image" content="chaos-star-generator-files/assets/160x160.png">
+
+  <!-- Microsoft tile -->
+  <meta name="msapplication-TileColor" content="#000000">
+  <meta name="msapplication-TileImage" content="chaos-star-generator-files/assets/160x160.png">
+
+  <link rel="canonical" href="./">
+
+  <link rel="stylesheet" href="chaos-star-generator-files/css/styles.css">
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 </head>
 <body>
@@ -24,12 +69,14 @@
       <div class="ctrl-tabs">
         <button class="ctrl-tab active" data-tab="shape">Shape</button>
         <button class="ctrl-tab" data-tab="colors">Colors</button>
+        <button class="ctrl-tab" data-tab="texture">Texture</button>
         <button class="ctrl-tab" data-tab="actions">Actions</button>
       </div>
 
       <!-- Tab content containers -->
       <div class="ctrl-tab-content active" data-content="shape" id="tabShape"></div>
       <div class="ctrl-tab-content" data-content="colors" id="tabColors"></div>
+      <div class="ctrl-tab-content" data-content="texture" id="tabTexture"></div>
       <div class="ctrl-tab-content" data-content="actions" id="tabActions">
         <button class="cp-btn cp-btn-start" id="reRandom">⟳ Inspire me randomly</button>
         <div class="cs-row">
@@ -119,6 +166,8 @@
         <div class="wm-section">
           <h3>Features</h3>
           <div class="wm-keys">
+            <div class="wm-key-row"><span>🖼</span><span>28 sample textures + upload</span></div>
+            <div class="wm-key-row"><span>✥</span><span>Drag-to-position textures</span></div>
             <div class="wm-key-row"><span>↗</span><span>Share via URL</span></div>
             <div class="wm-key-row"><span>↓</span><span>Export as PNG</span></div>
             <div class="wm-key-row"><span>←</span><span>Browser back/forward</span></div>
@@ -136,6 +185,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/main.js"></script>
+  <script type="module" src="chaos-star-generator-files/js/main.js"></script>
 </body>
 </html>

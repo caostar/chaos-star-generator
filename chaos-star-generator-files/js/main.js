@@ -4,6 +4,7 @@ import { Tweener } from './animation.js';
 import { GradientEditor } from './gradient-editor.js';
 import { exportPNG } from './export.js';
 import { buildShareUrl, loadFromUrl, syncUrl, endSession } from './url-codec.js';
+import { textureManager, SAMPLE_TEXTURES } from './texture-manager.js';
 
 let params = { ...getDefaults(), ...generateRandomParams() };
 let renderer, tweener, gradientEditor;
@@ -25,12 +26,15 @@ function init() {
   buildColorsTab();
   wireActionsTab();
   wirePanelChrome();
+  buildTextureTab();
   setupWelcomeModal();
   syncControlsFromParams();
   startRenderLoop();
   setupKeyboard();
   setupZoom();
+  setupTextureDrag();
   setupHistory();
+  applyTexture();
   // initial URL is the current location (preserve incoming ?design=); don't
   // push a new entry just for page load — only sync if there was no design.
   if (!urlParams) syncUrl(params, { mode: 'replace' });
@@ -189,7 +193,16 @@ function setupHistory() {
     const merged = { ...getDefaults(), ...newParams };
     if (inspireActive) stopInspire();
     tweener.transitionTo(params, merged, 600);
-    setTimeout(() => syncControlsFromParams(), 650);
+    // Texture params aren't tweened — apply them immediately
+    params.textureMode = merged.textureMode;
+    params.textureIndex = merged.textureIndex;
+    params.textureOffsetX = merged.textureOffsetX ?? 0;
+    params.textureOffsetY = merged.textureOffsetY ?? 0;
+    applyTexture();
+    setTimeout(() => {
+      syncControlsFromParams();
+      refreshTextureUi();
+    }, 650);
     endSession();
   });
 }
@@ -235,6 +248,7 @@ function buildShapeTab() {
   const container = document.getElementById('tabShape');
   for (const [key, def] of Object.entries(PARAM_DEFS)) {
     if (key === 'gradientRotation') continue;
+    if (key === 'textureScale') continue;
     container.appendChild(createSliderRow(key, def, (value) => {
       if (key === 'globalScale') {
         gsap.killTweensOf(params, 'globalScale');
@@ -317,6 +331,247 @@ function buildColorsTab() {
     onParamChange();
   });
   gradientEditor.setStops(params.gradientStops);
+}
+
+/* ---------- Texture tab ---------- */
+
+let textureDragMode = false;
+
+function buildTextureTab() {
+  const container = document.getElementById('tabTexture');
+
+  // None / sample / custom mode buttons row
+  const modeRow = document.createElement('div');
+  modeRow.className = 'cs-row';
+  modeRow.innerHTML = '<div class="cs-label">Mode</div>';
+  const modeBtns = document.createElement('div');
+  modeBtns.className = 'tx-mode-row';
+  for (const m of ['none', 'sample', 'custom']) {
+    const b = document.createElement('button');
+    b.className = 'ctrl-tab';
+    b.dataset.mode = m;
+    b.textContent = m === 'none' ? 'No texture' : m === 'sample' ? 'Sample' : 'Custom';
+    b.addEventListener('click', () => setTextureMode(m));
+    modeBtns.appendChild(b);
+  }
+  modeRow.appendChild(modeBtns);
+  container.appendChild(modeRow);
+
+  // Sample grid
+  const grid = document.createElement('div');
+  grid.className = 'tx-grid';
+  grid.id = 'textureGrid';
+  for (let i = 0; i < SAMPLE_TEXTURES.length; i++) {
+    const cell = document.createElement('button');
+    cell.className = 'tx-cell';
+    cell.dataset.index = i;
+    cell.style.backgroundImage = `url('${textureManager.sampleSrc(i)}')`;
+    cell.title = `Sample ${i + 1}`;
+    cell.addEventListener('click', () => {
+      params.textureMode = 'sample';
+      params.textureIndex = i;
+      params.textureOffsetX = 0;
+      params.textureOffsetY = 0;
+      onParamChange();
+      applyTexture();
+      refreshTextureUi();
+    });
+    grid.appendChild(cell);
+  }
+  container.appendChild(grid);
+
+  // Custom upload row
+  const uploadRow = document.createElement('div');
+  uploadRow.className = 'cs-row';
+  uploadRow.innerHTML = '<div class="cs-label">Custom Image</div>';
+  const uploadWrap = document.createElement('div');
+  uploadWrap.className = 'cs-slider-wrap';
+  const uploadLabel = document.createElement('label');
+  uploadLabel.className = 'cp-btn';
+  uploadLabel.style.flex = '1';
+  uploadLabel.style.textAlign = 'center';
+  uploadLabel.style.margin = '0';
+  uploadLabel.textContent = '📁 Choose file…';
+  const uploadInput = document.createElement('input');
+  uploadInput.type = 'file';
+  uploadInput.accept = 'image/*';
+  uploadInput.style.display = 'none';
+  uploadInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      await textureManager.loadCustomFromFile(file);
+      params.textureMode = 'custom';
+      params.textureOffsetX = 0;
+      params.textureOffsetY = 0;
+      onParamChange();
+      applyTexture();
+      refreshTextureUi();
+      showToast(
+        "Your custom texture is stored only in this browser and won't appear " +
+        'for others opening a shared link.'
+      );
+    } catch (err) {
+      showToast('Failed to load image');
+    }
+    uploadInput.value = '';
+  });
+  uploadLabel.appendChild(uploadInput);
+  uploadWrap.appendChild(uploadLabel);
+  uploadRow.appendChild(uploadWrap);
+  container.appendChild(uploadRow);
+
+  // Texture scale slider (textureScale param)
+  const scaleDef = PARAM_DEFS.textureScale;
+  container.appendChild(createSliderRow('textureScale', scaleDef, (value) => {
+    params.textureScale = value;
+    onParamChange();
+  }));
+
+  // Drag mode toggle + reset position
+  const dragRow = document.createElement('div');
+  dragRow.className = 'cs-row';
+  const dragLabel = document.createElement('label');
+  dragLabel.className = 'cs-toggle-wrap';
+  dragLabel.style.gap = '8px';
+  const dragToggle = document.createElement('input');
+  dragToggle.type = 'checkbox';
+  dragToggle.id = 'textureDragMode';
+  dragToggle.className = 'cs-toggle';
+  dragToggle.addEventListener('change', (e) => {
+    textureDragMode = e.target.checked;
+    document.body.classList.toggle('texture-drag', textureDragMode);
+  });
+  const dragInd = document.createElement('span');
+  dragInd.className = 'cs-toggle-indicator';
+  const dragText = document.createElement('span');
+  dragText.style.fontSize = '10px';
+  dragText.style.color = '#aaa';
+  dragText.textContent = 'Drag mode (move texture on canvas)';
+  dragLabel.appendChild(dragToggle);
+  dragLabel.appendChild(dragInd);
+  dragLabel.appendChild(dragText);
+  dragRow.appendChild(dragLabel);
+  container.appendChild(dragRow);
+
+  const resetBtn = document.createElement('button');
+  resetBtn.className = 'cp-btn';
+  resetBtn.textContent = '⟲ Reset texture position';
+  resetBtn.addEventListener('click', () => {
+    params.textureOffsetX = 0;
+    params.textureOffsetY = 0;
+    params.textureScale = 1;
+    onParamChange();
+    syncControlsFromParams();
+  });
+  container.appendChild(resetBtn);
+
+  refreshTextureUi();
+}
+
+function refreshTextureUi() {
+  // Highlight active mode button
+  document.querySelectorAll('#tabTexture [data-mode]').forEach((b) => {
+    b.classList.toggle('active', b.dataset.mode === params.textureMode);
+  });
+  // Highlight active sample
+  document.querySelectorAll('#tabTexture .tx-cell').forEach((c) => {
+    const i = parseInt(c.dataset.index);
+    c.classList.toggle(
+      'active',
+      params.textureMode === 'sample' && params.textureIndex === i
+    );
+  });
+}
+
+function setTextureMode(mode) {
+  if (mode === params.textureMode) return;
+  params.textureMode = mode;
+  if (mode === 'sample' && params.textureIndex == null) params.textureIndex = 0;
+  onParamChange();
+  applyTexture();
+  refreshTextureUi();
+}
+
+async function applyTexture() {
+  try {
+    if (params.textureMode === 'none') {
+      renderer.setTexture(null);
+      return;
+    }
+    if (params.textureMode === 'sample') {
+      const img = await textureManager.loadSample(params.textureIndex || 0);
+      renderer.setTexture(img);
+      return;
+    }
+    if (params.textureMode === 'custom') {
+      const img = await textureManager.loadStoredCustom();
+      if (img) {
+        renderer.setTexture(img);
+      } else {
+        // No custom image available (e.g. shared URL on a fresh browser)
+        renderer.setTexture(null);
+        params.textureMode = 'none';
+        refreshTextureUi();
+        showToast('Custom texture not available — pick a sample or upload your own');
+      }
+    }
+  } catch (e) {
+    renderer.setTexture(null);
+  }
+}
+
+function setupTextureDrag() {
+  const canvas = document.getElementById('starCanvas');
+
+  let dragging = false;
+  let startX = 0, startY = 0;
+  let baseOffX = 0, baseOffY = 0;
+
+  function shouldHandle(targetEl) {
+    if (!textureDragMode) return false;
+    if (params.textureMode === 'none') return false;
+    if (targetEl.closest('#controls-panel')) return false;
+    if (targetEl.closest('#welcome-modal')) return false;
+    return true;
+  }
+
+  function start(clientX, clientY) {
+    dragging = true;
+    startX = clientX;
+    startY = clientY;
+    baseOffX = params.textureOffsetX || 0;
+    baseOffY = params.textureOffsetY || 0;
+  }
+
+  function move(clientX, clientY) {
+    if (!dragging) return;
+    params.textureOffsetX = baseOffX + (clientX - startX);
+    params.textureOffsetY = baseOffY + (clientY - startY);
+    scheduleUrlSync();
+  }
+
+  function end() { dragging = false; }
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (!shouldHandle(e.target)) return;
+    e.preventDefault();
+    start(e.clientX, e.clientY);
+  });
+  window.addEventListener('mousemove', (e) => move(e.clientX, e.clientY));
+  window.addEventListener('mouseup', end);
+
+  canvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    if (!shouldHandle(e.target)) return;
+    start(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+  window.addEventListener('touchmove', (e) => {
+    if (e.touches.length !== 1 || !dragging) return;
+    move(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+  window.addEventListener('touchend', end);
+  window.addEventListener('touchcancel', end);
 }
 
 /* ---------- Actions tab ---------- */
@@ -480,16 +735,31 @@ function nextInspiration() {
 function copyShareUrl() {
   const url = buildShareUrl(params);
   navigator.clipboard.writeText(url).then(
-    () => showToast('URL copied to clipboard'),
+    () => {
+      if (params.textureMode === 'custom') {
+        showToast(
+          'URL copied — note: your custom texture is stored only in this browser ' +
+          'and won\'t appear for others opening the link',
+          4500
+        );
+      } else {
+        showToast('URL copied to clipboard');
+      }
+    },
     () => showToast('Failed to copy URL')
   );
 }
 
-function showToast(msg) {
+function showToast(msg, duration = 10000) {
   const toast = document.getElementById('toast');
   toast.textContent = msg;
   toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 2000);
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => toast.classList.remove('show'), duration);
+  toast.onclick = () => {
+    clearTimeout(toast._t);
+    toast.classList.remove('show');
+  };
 }
 
 function toggleFullscreen() {

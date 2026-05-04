@@ -11,6 +11,11 @@ const SHORT_KEYS = {
   gradientStops: 'g',
   gradientType: 'gt',
   backgroundColor: 'bg',
+  textureMode: 'tm',
+  textureIndex: 'ti',
+  textureOffsetX: 'tx',
+  textureOffsetY: 'ty',
+  textureScale: 'ts',
 };
 
 const REVERSE_KEYS = Object.fromEntries(
@@ -29,6 +34,8 @@ export function encodeParams(params) {
       compact[shortKey] = params.backgroundColor;
     } else if (key === 'gradientType') {
       compact[shortKey] = params.gradientType;
+    } else if (key === 'textureMode') {
+      compact[shortKey] = params.textureMode;
     } else if (typeof params[key] === 'number') {
       compact[shortKey] = Math.round(params[key] * 100) / 100;
     }
@@ -54,6 +61,8 @@ export function decodeParams(encoded) {
         params.backgroundColor = value;
       } else if (fullKey === 'gradientType') {
         params.gradientType = value;
+      } else if (fullKey === 'textureMode') {
+        params.textureMode = value;
       } else if (typeof value === 'number') {
         params[fullKey] = value;
       }

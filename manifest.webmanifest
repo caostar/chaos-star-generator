@@ -1,0 +1,19 @@
+{
+  "name": "Chaos Star Generator",
+  "short_name": "Chaos Star",
+  "description": "Generate your own Chaos Star or just get some random inspiration.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    { "src": "chaos-star-generator-files/assets/57x57.png",   "sizes": "57x57",   "type": "image/png" },
+    { "src": "chaos-star-generator-files/assets/72x72.png",   "sizes": "72x72",   "type": "image/png" },
+    { "src": "chaos-star-generator-files/assets/114x114.png", "sizes": "114x114", "type": "image/png" },
+    { "src": "chaos-star-generator-files/assets/160x160.png", "sizes": "160x160", "type": "image/png", "purpose": "any" },
+    { "src": "chaos-star-generator-files/assets/160x160.png", "sizes": "160x160", "type": "image/png", "purpose": "maskable" }
+  ]
+}

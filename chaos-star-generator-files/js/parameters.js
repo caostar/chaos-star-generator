@@ -8,6 +8,7 @@ export const PARAM_DEFS = {
   tipLength:      { min: 1,   max: 300, default: 100, step: 1,   label: 'Tip Length' },
   tipBottomAngle: { min: 0,   max: 90,  default: 30,  step: 1,   label: 'Tip Notch (deg)' },
   gradientRotation: { min: 0, max: 360, default: 0,   step: 1,   label: 'Gradient Rotation' },
+  textureScale:    { min: 0.1, max: 5,  default: 1,   step: 0.05, label: 'Texture Scale' },
 };
 
 export const GRADIENT_TYPES = ['angular', 'linear', 'radial', 'solid'];
@@ -24,6 +25,11 @@ export function getDefaults() {
     { color: '#00aaff', position: 1 },
   ];
   params.backgroundColor = '#000000';
+  params.textureMode = 'none'; // 'none' | 'sample' | 'custom'
+  params.textureIndex = 0;
+  params.textureOffsetX = 0;
+  params.textureOffsetY = 0;
+  params.textureScale = 1;
   return params;
 }
 

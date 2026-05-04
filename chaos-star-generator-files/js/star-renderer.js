@@ -3,6 +3,11 @@ export class StarRenderer {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.dpr = window.devicePixelRatio || 1;
+    this.textureImage = null;
+  }
+
+  setTexture(image) {
+    this.textureImage = image;
   }
 
   resize(width, height) {
@@ -87,7 +92,24 @@ export class StarRenderer {
       ctx.arc(cx, cy, cr, 0, Math.PI * 2, true);
     }
 
-    ctx.fill('nonzero');
+    // If a texture is active, clip to the star path and draw the image
+    // instead of filling with the gradient.
+    if (this.textureImage && p.textureMode && p.textureMode !== 'none') {
+      ctx.save();
+      ctx.clip('nonzero');
+      const img = this.textureImage;
+      const span = (cr + bl + tl) * 2;
+      const fitScale = Math.max(span / img.width, span / img.height);
+      const ts = fitScale * (p.textureScale ?? 1);
+      const w = img.width * ts;
+      const h = img.height * ts;
+      const ox = (p.textureOffsetX ?? 0) * scale;
+      const oy = (p.textureOffsetY ?? 0) * scale;
+      ctx.drawImage(img, cx - w / 2 + ox, cy - h / 2 + oy, w, h);
+      ctx.restore();
+    } else {
+      ctx.fill('nonzero');
+    }
   }
 
   buildGradient(ctx, cx, cy, gr, maxRadius, p) {
