@@ -27,6 +27,19 @@
 - 💾 **PNG export** with transparent or solid background
 - 📱 **Mobile native** — pinch zoom, drag-to-pan textures, long-press to save to Photos, "Add to Home Screen"
 
+## Magickal use
+
+Beyond being a beautiful creative tool, the Chaos Star Generator can also serve as a powerful magickal tool. Here's a fun experiment:
+
+1. Upload a texture with a sigil placed at the exact center of the image. Like this one, included on the sample textures:
+
+   <img src="chaos-star-generator-files/textures/sygilexample.jpg" alt="Example sigil texture" width="200">
+
+2. Click on **Inspire me randomly** or just hit "R".
+3. Adjust the **Transition** parameter to set your preferred speed.
+4. Enter into a state of gnosis and focus on the moving Chaos Star while keeping your sigil in view.
+5. Boom. You've just created a powerful ritual moment.
+
 ## Quick start
 
 It's a static site — no build step.

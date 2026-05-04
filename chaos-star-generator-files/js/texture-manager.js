@@ -1,8 +1,11 @@
 // Hardcoded list of sample textures shipped under /textures/.
-// Indexed positions are stable (used in shared URLs) — do not reorder.
+// Indexed positions are referenced by shared URLs — avoid reordering when
+// possible (any change will make older shared links point to a different
+// texture).
 export const SAMPLE_TEXTURES = [
+  'sygilexample.jpg',
   '1.jpg', '10.jpg', '11.jpg', '13.jpg', '16.jpg', '19.jpg',
-  '1rger.jpg', '2.jpg', '21.jpg', '22.jpg', '24.jpg', '25.jpg',
+  '1rger.jpg', '2.jpg', '21.jpg', '22.jpg', '24.jpg',
   '2er.jpg', '3.jpg', '3erg.jpg', '4.jpg', '5.jpg', '5erg.jpg',
   '6.jpg', '6erg.jpg', '7.jpg', '7ergre.jpg', '8.jpg', '8erre.jpg',
   '9.jpg', '9ergre.jpg', 'erg4.jpg', 'regre.jpg',
