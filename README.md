@@ -105,7 +105,7 @@ Manifest is configured for installable PWA — open in Safari/Chrome on mobile, 
 
 ## Credits
 
-Inspired by the original [caostar.com](https://caostar.com/) by AD. This is a from-scratch reimplementation.
+Inspired by the original [caostar.com](https://caostar.com/thoughts/the-chaos-star-generator/2013/03/) by AD. This is a from-scratch reimplementation.
 
 The Symbol of Chaos itself was popularized by Michael Moorcock in his Eternal Champion novels and adopted by chaos magicians from the 1970s onward — eight arrows radiating from a single point, representing chaos as the source of all possibility.
 
