@@ -124,5 +124,5 @@ The Symbol of Chaos itself was popularized by Michael Moorcock in his Eternal Ch
 
 ## License
 
-This repository is under the Do What The Fuck You Want To Public License [WTFPL](https://caostar.com/thoughts/the-chaos-star-generator/2013/03/)
+This repository is under the Do What The Fuck You Want To Public License [WTFPL](http://www.wtfpl.net/about/)
 
