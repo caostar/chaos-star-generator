@@ -8,13 +8,13 @@
 
   <title>Chaos Star Generator</title>
   <meta name="description" content="Generate your own Chaos Star or just get some random inspiration.">
-  <meta name="application-name" content="Chaos Star">
+  <meta name="application-name" content="Chaos Star Generator">
 
   <!-- PWA / Add to Home Screen -->
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Chaos Star">
+  <meta name="apple-mobile-web-app-title" content="Chaos Star Generator">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
   <!-- Icons -->
@@ -97,12 +97,15 @@
         <button class="cp-btn hiddenOnMobile" id="goFullScreen" style="width:100%;">⛶ Full screen</button>
 
         <div class="ctrl-keys" style="margin-top:14px;">
-          <div class="ctrl-key-row"><kbd>Space</kbd><span>Generate a random one</span></div>
-          <div class="ctrl-key-row"><kbd>R</kbd><span>Toggle inspire</span></div>
-          <div class="ctrl-key-row"><kbd>F</kbd><span>Full screen</span></div>
-          <div class="ctrl-key-row"><kbd>H</kbd><span>Hide controls</span></div>
-          <div class="ctrl-key-row"><kbd>Esc</kbd><span>Exit / stop</span></div>
-          <div class="ctrl-key-row"><kbd>⌘ /Wheel</kbd><span>Zoom star</span></div>
+          <div class="ctrl-key-row clickable" data-action="random"><kbd>Space</kbd><span>Generate a random one</span></div>
+          <div class="ctrl-key-row clickable" data-action="inspire"><kbd>R</kbd><span>Toggle inspire</span></div>
+          <div class="ctrl-key-row clickable" data-action="fullscreen"><kbd>F</kbd><span>Full screen</span></div>
+          <div class="ctrl-key-row clickable" data-action="hide"><kbd>H</kbd><span>Hide controls</span></div>
+          <div class="ctrl-key-row clickable" data-action="escape"><kbd>Esc</kbd><span>Exit / stop</span></div>
+          <div class="ctrl-key-row"><kbd>Tap</kbd><span>Random star (on canvas)</span></div>
+          <div class="ctrl-key-row"><kbd>Hold</kbd><span>Save to Photos (mobile)</span></div>
+          <div class="ctrl-key-row"><kbd>⌘ ± / Wheel</kbd><span>Zoom star</span></div>
+          <div class="ctrl-key-row"><kbd>Pinch</kbd><span>Zoom (mobile)</span></div>
         </div>
       </div>
     </div>

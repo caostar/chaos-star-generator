@@ -406,6 +406,18 @@ html, body {
 }
 .ctrl-key-row span { color: #aaa; }
 
+.ctrl-key-row.clickable {
+  cursor: pointer;
+  padding: 4px 6px;
+  margin: 0 -6px;
+  border-radius: 4px;
+  transition: background 0.15s;
+  user-select: none;
+}
+.ctrl-key-row.clickable:hover { background: rgba(79, 195, 247, 0.08); }
+.ctrl-key-row.clickable:hover span { color: #4fc3f7; }
+.ctrl-key-row.clickable:active { background: rgba(79, 195, 247, 0.18); }
+
 /* --- Texture tab --- */
 .tx-mode-row {
   display: flex;

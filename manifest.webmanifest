@@ -1,6 +1,6 @@
 {
   "name": "Chaos Star Generator",
-  "short_name": "Chaos Star",
+  "short_name": "Chaos Star Generator",
   "description": "Generate your own Chaos Star or just get some random inspiration.",
   "start_url": "./",
   "scope": "./",

@@ -33,6 +33,7 @@ function init() {
   setupKeyboard();
   setupZoom();
   setupTextureDrag();
+  setupCanvasTap();
   setupHistory();
   applyTexture();
   // initial URL is the current location (preserve incoming ?design=); don't
@@ -184,6 +185,111 @@ function setupZoom() {
     if (e.target.closest('#controls-panel')) return;
     e.preventDefault();
   });
+}
+
+function setupCanvasTap() {
+  const canvas = document.getElementById('starCanvas');
+  const TAP_TOLERANCE = 8;
+  const LONG_PRESS_MS = 600;
+  let downX = 0, downY = 0, downTime = 0;
+  let multiTouch = false, longPressTimer = null, longPressFired = false;
+
+  function onDown(x, y) {
+    downX = x; downY = y; downTime = performance.now();
+    longPressFired = false;
+    clearTimeout(longPressTimer);
+    longPressTimer = setTimeout(() => {
+      longPressFired = true;
+      if (navigator.vibrate) navigator.vibrate(40);
+      saveToPhotos();
+    }, LONG_PRESS_MS);
+  }
+
+  function cancelLongPress() {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+  }
+
+  function moved(x, y) {
+    const dx = Math.abs(x - downX), dy = Math.abs(y - downY);
+    return dx >= TAP_TOLERANCE || dy >= TAP_TOLERANCE;
+  }
+
+  function isTap(x, y) {
+    const dt = performance.now() - downTime;
+    return !moved(x, y) && dt < LONG_PRESS_MS;
+  }
+
+  // ---- Mouse ----
+  canvas.addEventListener('mousedown', (e) => onDown(e.clientX, e.clientY));
+  canvas.addEventListener('mousemove', (e) => {
+    if (longPressTimer && moved(e.clientX, e.clientY)) cancelLongPress();
+  });
+  canvas.addEventListener('mouseup', (e) => {
+    cancelLongPress();
+    if (longPressFired) return;
+    if (!isTap(e.clientX, e.clientY)) return;
+    generateOneRandomStar();
+  });
+  canvas.addEventListener('mouseleave', cancelLongPress);
+
+  // ---- Touch ----
+  canvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length > 1) { multiTouch = true; cancelLongPress(); return; }
+    multiTouch = false;
+    onDown(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+  canvas.addEventListener('touchmove', (e) => {
+    if (e.touches.length !== 1) { cancelLongPress(); return; }
+    const t = e.touches[0];
+    if (longPressTimer && moved(t.clientX, t.clientY)) cancelLongPress();
+  }, { passive: true });
+  canvas.addEventListener('touchend', (e) => {
+    cancelLongPress();
+    if (multiTouch || e.touches.length > 0) { multiTouch = false; return; }
+    if (longPressFired) { longPressFired = false; return; }
+    const t = e.changedTouches[0];
+    if (!isTap(t.clientX, t.clientY)) return;
+    generateOneRandomStar();
+  });
+  canvas.addEventListener('touchcancel', cancelLongPress);
+}
+
+async function saveToPhotos() {
+  const transparent = document.getElementById('chooseTransparent')?.checked ?? false;
+  const offscreen = renderer.renderExport(params, !transparent);
+
+  offscreen.toBlob(async (blob) => {
+    if (!blob) return;
+    const file = new File([blob], 'chaos-star.png', { type: 'image/png' });
+
+    // Web Share API w/ files: on iOS opens the share sheet (with "Save Image"),
+    // on Android opens the picker (with "Save to Photos" via the gallery).
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: 'Chaos Star',
+          text: 'Chaos Star Generator',
+        });
+        return;
+      } catch (err) {
+        if (err && err.name === 'AbortError') return; // user cancelled
+        // otherwise fall through to download
+      }
+    }
+
+    // Fallback: trigger a download
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'chaos-star.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Image downloaded');
+  }, 'image/png');
 }
 
 function setupHistory() {
@@ -593,6 +699,24 @@ function wireActionsTab() {
   });
   document.getElementById('copyUrlBtn').addEventListener('click', copyShareUrl);
   document.getElementById('goFullScreen').addEventListener('click', toggleFullscreen);
+
+  // Tappable shortcut rows — essential on mobile where there's no keyboard
+  document.querySelectorAll('.ctrl-key-row.clickable').forEach((row) => {
+    row.addEventListener('click', () => runAction(row.dataset.action));
+  });
+}
+
+function runAction(action) {
+  switch (action) {
+    case 'random': generateOneRandomStar(); break;
+    case 'inspire': toggleInspire(); break;
+    case 'fullscreen': toggleFullscreen(); break;
+    case 'hide': toggleControls(); break;
+    case 'escape':
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (inspireActive) stopInspire();
+      break;
+  }
 }
 
 /* ---------- Slider row factory ---------- */
