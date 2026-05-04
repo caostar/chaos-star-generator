@@ -192,22 +192,30 @@ function setupCanvasTap() {
   const TAP_TOLERANCE = 8;
   const LONG_PRESS_MS = 600;
   let downX = 0, downY = 0, downTime = 0;
-  let multiTouch = false, longPressTimer = null, longPressFired = false;
+  let multiTouch = false;
+  let cancelled = false;
+  let feedbackTimer = null;
+  let longPressReady = false;
 
   function onDown(x, y) {
     downX = x; downY = y; downTime = performance.now();
-    longPressFired = false;
-    clearTimeout(longPressTimer);
-    longPressTimer = setTimeout(() => {
-      longPressFired = true;
+    cancelled = false;
+    longPressReady = false;
+    clearTimeout(feedbackTimer);
+    // Haptic + flag at threshold; the actual save runs in onUp so
+    // navigator.share() stays inside a user-gesture handler.
+    feedbackTimer = setTimeout(() => {
+      if (cancelled) return;
+      longPressReady = true;
       if (navigator.vibrate) navigator.vibrate(40);
-      saveToPhotos();
+      showToast('Release to save image…', 1500);
     }, LONG_PRESS_MS);
   }
 
-  function cancelLongPress() {
-    clearTimeout(longPressTimer);
-    longPressTimer = null;
+  function cancel() {
+    cancelled = true;
+    clearTimeout(feedbackTimer);
+    feedbackTimer = null;
   }
 
   function moved(x, y) {
@@ -215,44 +223,50 @@ function setupCanvasTap() {
     return dx >= TAP_TOLERANCE || dy >= TAP_TOLERANCE;
   }
 
-  function isTap(x, y) {
+  function onUp(x, y) {
+    clearTimeout(feedbackTimer);
+    feedbackTimer = null;
+    if (cancelled) return;
     const dt = performance.now() - downTime;
-    return !moved(x, y) && dt < LONG_PRESS_MS;
+    const movedToo = moved(x, y);
+    if (movedToo) return; // drag, ignore
+    if (dt >= LONG_PRESS_MS || longPressReady) {
+      saveToPhotos(); // call synchronously inside the up-handler
+    } else {
+      generateOneRandomStar();
+    }
+    longPressReady = false;
   }
 
   // ---- Mouse ----
   canvas.addEventListener('mousedown', (e) => onDown(e.clientX, e.clientY));
   canvas.addEventListener('mousemove', (e) => {
-    if (longPressTimer && moved(e.clientX, e.clientY)) cancelLongPress();
+    if (feedbackTimer && moved(e.clientX, e.clientY)) cancel();
   });
-  canvas.addEventListener('mouseup', (e) => {
-    cancelLongPress();
-    if (longPressFired) return;
-    if (!isTap(e.clientX, e.clientY)) return;
-    generateOneRandomStar();
-  });
-  canvas.addEventListener('mouseleave', cancelLongPress);
+  canvas.addEventListener('mouseup', (e) => onUp(e.clientX, e.clientY));
+  canvas.addEventListener('mouseleave', cancel);
 
   // ---- Touch ----
   canvas.addEventListener('touchstart', (e) => {
-    if (e.touches.length > 1) { multiTouch = true; cancelLongPress(); return; }
+    if (e.touches.length > 1) { multiTouch = true; cancel(); return; }
     multiTouch = false;
     onDown(e.touches[0].clientX, e.touches[0].clientY);
   }, { passive: true });
   canvas.addEventListener('touchmove', (e) => {
-    if (e.touches.length !== 1) { cancelLongPress(); return; }
+    if (e.touches.length !== 1) { cancel(); return; }
     const t = e.touches[0];
-    if (longPressTimer && moved(t.clientX, t.clientY)) cancelLongPress();
+    if (feedbackTimer && moved(t.clientX, t.clientY)) cancel();
   }, { passive: true });
   canvas.addEventListener('touchend', (e) => {
-    cancelLongPress();
-    if (multiTouch || e.touches.length > 0) { multiTouch = false; return; }
-    if (longPressFired) { longPressFired = false; return; }
+    if (multiTouch || e.touches.length > 0) {
+      multiTouch = false;
+      cancel();
+      return;
+    }
     const t = e.changedTouches[0];
-    if (!isTap(t.clientX, t.clientY)) return;
-    generateOneRandomStar();
+    onUp(t.clientX, t.clientY);
   });
-  canvas.addEventListener('touchcancel', cancelLongPress);
+  canvas.addEventListener('touchcancel', cancel);
 }
 
 async function saveToPhotos() {
