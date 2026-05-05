@@ -2,6 +2,7 @@
 
 import { PARAM_DEFS } from './parameters.js';
 import { listBuiltins, shaderLabel, loadBuiltin } from './shader-manager.js';
+import { SAMPLE_TEXTURES, sampleUrl, hasCustom } from './texture-manager-3d.js';
 
 function slider(opts) {
   const { label, min, max, step, value, onInput } = opts;
@@ -85,20 +86,19 @@ export function populateMaterial(container, params, onChange, onUpload) {
   }
 
   if (params.materialMode === 'texture') {
-    container.appendChild(pillsRow('Source', [
-      { label: 'None', value: 'none' },
+    const sources = [
+      { label: 'None',   value: 'none'   },
       { label: 'Sample', value: 'sample' },
-    ], params.textureMode, (v) => onChange('textureMode', v, { material: true })));
+    ];
+    if (hasCustom()) sources.push({ label: 'Custom', value: 'custom' });
+    container.appendChild(pillsRow('Source', sources,
+      params.textureMode, (v) => onChange('textureMode', v, { material: true })));
 
     if (params.textureMode === 'sample') {
       const grid = el('div', 'tex-grid');
-      const ids = [0, ...Array.from({ length: 27 }, (_, i) => i + 1)];
-      for (const idx of ids) {
+      for (let idx = 0; idx < SAMPLE_TEXTURES.length; idx++) {
         const tile = el('div', 'tex-tile');
-        const url = idx === 0
-          ? '../chaos-star-generator-files/textures/sygilexample.jpg'
-          : `../chaos-star-generator-files/textures/${idx}.jpg`;
-        tile.style.backgroundImage = `url('${url}')`;
+        tile.style.backgroundImage = `url('${sampleUrl(idx)}')`;
         if (idx === params.textureIndex) tile.classList.add('selected');
         tile.addEventListener('click', () => {
           grid.querySelectorAll('.tex-tile').forEach(t => t.classList.remove('selected'));
@@ -110,6 +110,21 @@ export function populateMaterial(container, params, onChange, onUpload) {
       container.appendChild(grid);
     }
 
+    // Custom upload row
+    const upWrap = el('div', 'cs-row');
+    const upBtn = el('label', 'cp-btn');
+    upBtn.style.cssText = 'flex:1; cursor:pointer; text-align:center;';
+    upBtn.textContent = '↑ Upload custom image';
+    const fileIn = el('input');
+    fileIn.type = 'file'; fileIn.accept = 'image/*'; fileIn.style.display = 'none';
+    fileIn.addEventListener('change', () => {
+      if (fileIn.files?.[0]) onUpload(fileIn.files[0]);
+    });
+    upBtn.appendChild(fileIn);
+    upWrap.style.cssText = 'margin-top:10px;';
+    upWrap.appendChild(upBtn);
+    container.appendChild(upWrap);
+
     const triRow = el('label', 'cs-toggle-wrap');
     triRow.style.cssText = 'gap:8px; margin-top:10px;';
     const cb = el('input'); cb.type = 'checkbox'; cb.className = 'cs-toggle'; cb.checked = !!params.triplanar;
@@ -117,6 +132,12 @@ export function populateMaterial(container, params, onChange, onUpload) {
     triRow.append(cb, el('span', 'cs-toggle-indicator'),
       el('span', '', 'Triplanar wrapping (no pole pinching)'));
     container.appendChild(triRow);
+
+    container.appendChild(slider({
+      label: 'Texture scale', min: PARAM_DEFS.textureScale.min, max: PARAM_DEFS.textureScale.max,
+      step: PARAM_DEFS.textureScale.step, value: params.textureScale,
+      onInput: (v) => onChange('textureScale', v, { material: true }),
+    }));
   }
 
   container.appendChild(colorRow('Background', params.backgroundColor, (v) => onChange('backgroundColor', v)));

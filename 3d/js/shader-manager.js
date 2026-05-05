@@ -37,6 +37,13 @@ export async function loadWrapper() {
   return cache.wrapper;
 }
 
+let triplanarSrc = null;
+export async function loadTriplanar() {
+  if (triplanarSrc) return triplanarSrc;
+  triplanarSrc = await fetchText('shaders/common/triplanar.frag');
+  return triplanarSrc;
+}
+
 export async function loadBuiltin(id) {
   if (cache.builtins[id]) return cache.builtins[id];
   cache.builtins[id] = await fetchText(`shaders/builtin/${id}.frag`);

@@ -4,8 +4,11 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { getDefaults, generateRandomParams, PARAM_DEFS, NUMERIC_KEYS, validateParams } from './parameters.js';
 import { buildChaosSphereGeometry } from './sphere-builder.js';
 import {
-  loadVertex, loadWrapper, resolveShader, listBuiltins, fetchShaderToy,
+  loadVertex, loadWrapper, loadTriplanar, resolveShader, listBuiltins, fetchShaderToy,
 } from './shader-manager.js';
+import {
+  loadSample, loadStoredCustom, setCustomFromFile, hasCustom, clearCustom, SAMPLE_TEXTURES,
+} from './texture-manager-3d.js';
 import { Tweener } from './animation.js';
 import { syncUrl, loadFromUrl, endSession, buildShareUrl, SHADER_SOURCE_MAX } from './url-codec-3d.js';
 import { exportSphere } from './exporters.js';
@@ -34,10 +37,14 @@ const state = {
 };
 
 window.__chaosphere = state; // debug handle
+window.__rebuildMaterial = async () => rebuildMaterial();
+window.__rebuildGeometry = async () => rebuildGeometry();
+window.__refreshUI       = () => refreshUI();
 
 init();
 
 async function init() {
+  installShaderErrorCapture();
   const fromUrl = loadFromUrl();
   state.params = fromUrl || generateRandomParams();
 
@@ -84,6 +91,7 @@ async function rebuildGeometry() {
 async function rebuildMaterial() {
   const params = state.params;
   let material;
+  state.lastShaderError = null;
 
   if (params.materialMode === 'shader') {
     const { vertex, fragment, source } = await resolveShader(params);
@@ -97,16 +105,38 @@ async function rebuildMaterial() {
       transparent: false,
     });
     material.userData.kind = 'shader';
+    state.lastGoodShader = { vertex, fragment };
+    hideShaderError();
   } else if (params.materialMode === 'texture') {
     const tex = await loadActiveTexture();
-    if (params.lighting === 'wireframe') {
-      material = new THREE.MeshBasicMaterial({ wireframe: true, color: 0x4fc3f7 });
+    if (!tex || params.lighting === 'wireframe') {
+      material = new THREE.MeshBasicMaterial({
+        wireframe: params.lighting === 'wireframe',
+        color: tex ? 0xffffff : 0x4fc3f7,
+        map: !tex ? null : (params.lighting === 'wireframe' ? null : tex),
+      });
+    } else if (params.triplanar) {
+      const vertex = await loadVertex();
+      const fragment = await loadTriplanar();
+      state.uniforms = {
+        uTex:      { value: tex },
+        uScale:    { value: 0.04 / Math.max(0.1, params.textureScale) },
+        uOffset:   { value: new THREE.Vector2(params.textureOffsetX, params.textureOffsetY) },
+        uLightDir: { value: new THREE.Vector3(0.5, 1.0, 0.7).normalize() },
+        uShaded:   { value: params.lighting === 'flat' ? 0 : 1 },
+      };
+      material = new THREE.ShaderMaterial({
+        uniforms: state.uniforms,
+        vertexShader: vertex,
+        fragmentShader: fragment,
+        side: THREE.DoubleSide,
+      });
     } else if (params.lighting === 'flat') {
-      material = new THREE.MeshBasicMaterial({ map: tex || null, color: tex ? 0xffffff : 0x4fc3f7 });
+      material = new THREE.MeshBasicMaterial({ map: tex, color: 0xffffff });
     } else {
       material = new THREE.MeshStandardMaterial({
-        map: tex || null,
-        color: tex ? 0xffffff : 0x4fc3f7,
+        map: tex,
+        color: 0xffffff,
         metalness: params.metalness,
         roughness: params.roughness,
       });
@@ -136,6 +166,63 @@ async function rebuildMaterial() {
     state.mesh = new THREE.Mesh(state.geometry, material);
     state.scene.add(state.mesh);
   }
+  // Trigger compilation; check for errors a tick later (Three.js attaches
+  // material.program after the next render).
+  setTimeout(() => checkShaderErrors(), 50);
+}
+
+function checkShaderErrors() { /* now driven by installShaderErrorCapture */ }
+
+// Hook console.error to detect THREE.WebGLProgram shader errors. When one
+// fires while we're in shader mode with custom code, surface the GLSL error
+// in the editor and revert to the last-good shader so the canvas keeps rendering.
+function installShaderErrorCapture() {
+  const origError = console.error.bind(console);
+  let suppressedSince = 0;
+  console.error = (...args) => {
+    const first = typeof args[0] === 'string' ? args[0] : '';
+    if (first.startsWith('THREE.WebGLProgram')) {
+      const log = args.join('\n');
+      const concise = extractGlslErrors(log);
+      // Throttle to one per second; Three.js re-fires every frame
+      const now = performance.now();
+      if (now - suppressedSince > 1000) {
+        suppressedSince = now;
+        showShaderError(concise);
+        revertToLastGoodShader();
+      }
+      return;
+    }
+    origError(...args);
+  };
+}
+
+function extractGlslErrors(log) {
+  const lines = log.split('\n');
+  return lines.filter(l => /^ERROR:/.test(l.trim())).slice(0, 6).join('\n')
+      || log.slice(0, 600);
+}
+
+function revertToLastGoodShader() {
+  const last = state.lastGoodShader;
+  if (!last || !state.material || state.material.type !== 'ShaderMaterial') return;
+  state.material.fragmentShader = last.fragment;
+  state.material.vertexShader   = last.vertex;
+  state.material.needsUpdate = true;
+}
+
+function showShaderError(log) {
+  const el = document.getElementById('shaderError');
+  if (!el) return;
+  // Strip Three.js internal prefix lines, keep just GLSL errors
+  const concise = log.split('\n')
+    .filter(line => /ERROR|WARN|^\d/.test(line))
+    .slice(0, 10).join('\n');
+  el.textContent = concise || log.slice(0, 800);
+  el.classList.add('visible');
+}
+function hideShaderError() {
+  document.getElementById('shaderError')?.classList.remove('visible');
 }
 
 function makeUniforms() {
@@ -150,19 +237,9 @@ function makeUniforms() {
 
 async function loadActiveTexture() {
   const p = state.params;
-  if (p.textureMode !== 'sample') return null;
-  // Reuse 2D texture filenames. Indices map to /chaos-star-generator-files/textures/N.jpg
-  const idx = p.textureIndex | 0;
-  const url = idx === 0
-    ? '../chaos-star-generator-files/textures/sygilexample.jpg'
-    : `../chaos-star-generator-files/textures/${idx}.jpg`;
-  return await new Promise((resolve) => {
-    new THREE.TextureLoader().load(url, (t) => {
-      t.colorSpace = THREE.SRGBColorSpace;
-      t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      resolve(t);
-    }, undefined, () => resolve(null));
-  });
+  if (p.textureMode === 'sample') return loadSample(p.textureIndex);
+  if (p.textureMode === 'custom') return loadStoredCustom();
+  return null;
 }
 
 function setupLights() {
@@ -268,10 +345,13 @@ async function transitionTo(target, durationMs = state.speedMs, urlMode = 'push'
 
 let urlDebounce = null;
 function syncUrlSoon(mode = 'auto') {
-  clearTimeout(urlDebounce);
-  urlDebounce = setTimeout(() => {
+  if (mode === 'push' || mode === 'replace') {
+    clearTimeout(urlDebounce);
     syncUrl(state.params, { mode });
-  }, mode === 'replace' || mode === 'push' ? 0 : 1000);
+    return;
+  }
+  clearTimeout(urlDebounce);
+  urlDebounce = setTimeout(() => syncUrl(state.params, { mode: 'auto' }), 1000);
 }
 
 function setupHistory() {
@@ -370,13 +450,60 @@ async function onShaderToyImport(url) {
 }
 
 async function onTextureUpload(file) {
-  // For v1, only sample textures from the 2D folder are supported.
-  toast('Custom texture upload coming in v1.1 — using sample textures for now');
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { toast('That doesn\'t look like an image'); return; }
+  if (file.size > 8 * 1024 * 1024) { toast('Image is over 8MB — try a smaller file'); return; }
+  await setCustomFromFile(file);
+  state.params.textureMode = 'custom';
+  state.params.materialMode = 'texture';
+  await rebuildMaterial();
+  refreshUI();
+  syncUrlSoon();
+  toast('Custom texture applied — won\'t travel through share URL');
 }
 
 /* ---------- Gestures ---------- */
 
+function setupCanvasGestures() {
+  const canvas = state.renderer.domElement;
+  let lastTap = 0;
+  let pressTimer = null;
+  let pressed = false;
+
+  canvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) {
+      if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+      return;
+    }
+    state.lastTouchTs = performance.now();
+    pressed = true;
+    // Long press → save STL (or share on mobile)
+    pressTimer = setTimeout(() => {
+      if (!pressed) return;
+      pressTimer = null;
+      exportSphere('stl', state).catch(err => toast(err.message));
+      toast('Exported STL');
+    }, 700);
+
+    // Double tap → toggle controls (matches 2D app's mobile UX)
+    const now = performance.now();
+    if (now - lastTap < 350) {
+      e.preventDefault();
+      toggleControls();
+      lastTap = 0;
+    } else {
+      lastTap = now;
+    }
+  }, { passive: false });
+
+  const cancel = () => { pressed = false; if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+  canvas.addEventListener('touchmove',   cancel, { passive: true });
+  canvas.addEventListener('touchend',    cancel, { passive: true });
+  canvas.addEventListener('touchcancel', cancel, { passive: true });
+}
+
 function setupGestures() {
+  setupCanvasGestures();
   // Space → random / Click → random / R → toggle inspire / F → fullscreen / H → hide controls
   window.addEventListener('keydown', (e) => {
     if (e.target?.matches('input, textarea, select')) return;
