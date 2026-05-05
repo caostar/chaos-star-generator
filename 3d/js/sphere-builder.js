@@ -6,16 +6,18 @@ import * as THREE from 'three';
 import { Brush, Evaluator, ADDITION } from 'three-bvh-csg';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
-const DEG = Math.PI / 180;
-const BASE_X = 45 * DEG;
-const BASE_Z = 35.26438968275465 * DEG;
+// 8 arrows, one for each vertex of a cube, normalized.
+// Each direction: ±X / ±Y / ±Z combined → 8 cube corners.
+const SQRT3_INV = 1 / Math.sqrt(3);
+const ARROW_DIRS = (() => {
+  const dirs = [];
+  for (const sx of [1, -1]) for (const sy of [1, -1]) for (const sz of [1, -1]) {
+    dirs.push(new THREE.Vector3(sx, sy, sz).multiplyScalar(SQRT3_INV));
+  }
+  return dirs;
+})();
 
-const ARROW_ANGLES = [
-  { rx:  BASE_X, rz:  BASE_Z },
-  { rx: -BASE_X, rz:  BASE_Z },
-  { rx:  BASE_X, rz: -BASE_Z },
-  { rx: -BASE_X, rz: -BASE_Z },
-];
+const UP = new THREE.Vector3(0, 1, 0);
 
 function makeArrowBrushes(params) {
   const R           = params.sphereRadius;
@@ -28,8 +30,8 @@ function makeArrowBrushes(params) {
   const coneGeom  = new THREE.ConeGeometry(coneR, coneLen, 24, 1, false);
 
   const brushes = [];
-  for (const a of ARROW_ANGLES) {
-    // shaft: base flush with sphere centre, extending up along +Y before rotation
+  for (const dir of ARROW_DIRS) {
+    // Build arrow along +Y, then rotate from +Y to the cube-corner direction.
     const shaft = new Brush(shaftGeom.clone());
     shaft.position.set(0, shaftLen / 2, 0);
     shaft.updateMatrix();
@@ -40,9 +42,9 @@ function makeArrowBrushes(params) {
     tip.updateMatrix();
     bake(tip);
 
-    // rotate the shaft+tip pair into its arrow direction
-    rotatePair(shaft, a);
-    rotatePair(tip,   a);
+    const q = new THREE.Quaternion().setFromUnitVectors(UP, dir);
+    rotatePair(shaft, q);
+    rotatePair(tip,   q);
     brushes.push(shaft, tip);
   }
   shaftGeom.dispose();
@@ -58,9 +60,8 @@ function bake(brush) {
   brush.updateMatrixWorld();
 }
 
-function rotatePair(brush, { rx, rz }) {
-  const m = new THREE.Matrix4();
-  m.makeRotationFromEuler(new THREE.Euler(rx, 0, rz, 'XYZ'));
+function rotatePair(brush, quaternion) {
+  const m = new THREE.Matrix4().makeRotationFromQuaternion(quaternion);
   brush.geometry.applyMatrix4(m);
   brush.updateMatrixWorld();
 }
