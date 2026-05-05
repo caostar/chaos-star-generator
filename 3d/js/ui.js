@@ -75,8 +75,9 @@ export function populateShape(container, params, onChange) {
       label: humanize(k), min: def.min, max: def.max, step: def.step, value: params[k],
       onInput: (v) => {
         const opts = {};
-        if (SHAPE_KEYS.has(k)) opts.shape = true;
-        if (k === 'globalScale')   opts.scale = true;
+        if (SHAPE_KEYS.has(k))     opts.shape  = true;
+        if (k === 'globalScale')   opts.scale  = true;
+        if (k === 'rotateSpeed')   opts.live   = true;
         onChange(k, v, opts);
       },
     }));
@@ -92,11 +93,13 @@ export function populateMaterial(container, params, onChange, onUpload) {
   ], params.materialMode, (v) => onChange('materialMode', v, { material: true })));
 
   if (params.materialMode === 'solid') {
-    container.appendChild(colorRow('Color', params.solidColor, (v) => onChange('solidColor', v, { material: true })));
-    container.appendChild(slider({ label: 'Metalness', min: 0, max: 1, step: 0.05, value: params.metalness,
-      onInput: (v) => onChange('metalness', v, { material: true }) }));
-    container.appendChild(slider({ label: 'Roughness', min: 0, max: 1, step: 0.05, value: params.roughness,
-      onInput: (v) => onChange('roughness', v, { material: true }) }));
+    container.appendChild(colorRow('Color', params.solidColor, (v) => onChange('solidColor', v, { live: true })));
+    container.appendChild(slider({ label: 'Metalness', min: PARAM_DEFS.metalness.min, max: PARAM_DEFS.metalness.max,
+      step: PARAM_DEFS.metalness.step, value: params.metalness,
+      onInput: (v) => onChange('metalness', v, { live: true }) }));
+    container.appendChild(slider({ label: 'Roughness', min: PARAM_DEFS.roughness.min, max: PARAM_DEFS.roughness.max,
+      step: PARAM_DEFS.roughness.step, value: params.roughness,
+      onInput: (v) => onChange('roughness', v, { live: true }) }));
   }
 
   if (params.materialMode === 'texture') {
@@ -150,11 +153,11 @@ export function populateMaterial(container, params, onChange, onUpload) {
     container.appendChild(slider({
       label: 'Texture scale', min: PARAM_DEFS.textureScale.min, max: PARAM_DEFS.textureScale.max,
       step: PARAM_DEFS.textureScale.step, value: params.textureScale,
-      onInput: (v) => onChange('textureScale', v, { material: true }),
+      onInput: (v) => onChange('textureScale', v, { live: true }),
     }));
   }
 
-  container.appendChild(colorRow('Background', params.backgroundColor, (v) => onChange('backgroundColor', v)));
+  container.appendChild(colorRow('Background', params.backgroundColor, (v) => onChange('backgroundColor', v, { live: true })));
 }
 
 export function populateShader(container, params, onShaderChange, onImportUrl) {

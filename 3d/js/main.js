@@ -431,21 +431,42 @@ function refreshUI() {
 
 async function onParamChange(key, value, opts = {}) {
   state.params[key] = value;
+
+  // Live-update path: mutate existing material/uniforms in place. Used for
+  // anything that can be tweaked without recreating the material — keeps
+  // slider drags buttery smooth.
+  if (opts.live) {
+    liveUpdateParam(key, value);
+    syncUrlSoon();
+    return;
+  }
+
   if (opts.shape) {
+    // Smooth CSG swap: fade material out, rebuild, fade back in.
     clearTimeout(state.shapeDebounce);
-    state.shapeDebounce = setTimeout(() => rebuildGeometry(), 200);
+    state.shapeDebounce = setTimeout(() => smoothShapeRebuild(), 220);
   }
   if (opts.scale && state.mesh) {
-    state.mesh.scale.setScalar(value);
+    // GSAP-tween mesh.scale from current to target so globalScale slider feels fluid
+    window.gsap.killTweensOf(state.mesh.scale);
+    window.gsap.to(state.mesh.scale, {
+      x: value, y: value, z: value,
+      duration: 0.18, ease: 'power2.out',
+      overwrite: 'auto',
+    });
   }
   if (opts.camera && state.camera) {
+    window.gsap.killTweensOf(state.camera.position);
     const dir = state.camera.position.clone().normalize();
     if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
-    state.camera.position.copy(dir.multiplyScalar(value));
-    state.controls.update();
+    const target = dir.multiplyScalar(value);
+    window.gsap.to(state.camera.position, {
+      x: target.x, y: target.y, z: target.z,
+      duration: 0.25, ease: 'power2.out',
+      onUpdate: () => state.controls.update(),
+    });
   }
   if (opts.material) {
-    // Auto-pick a sensible default when switching modes from a "blank" state
     if (key === 'materialMode') {
       if (value === 'texture' && state.params.textureMode === 'none') {
         state.params.textureMode = 'sample';
@@ -453,13 +474,66 @@ async function onParamChange(key, value, opts = {}) {
     }
     await rebuildMaterial();
   }
-  // Discrete switches that change which controls are visible → re-render the
-  // affected tab so the conditional UI (texture grid, color picker, etc.)
-  // appears or disappears.
   if (['materialMode', 'textureMode', 'lighting', 'triplanar'].includes(key)) {
     refreshUI();
   }
   syncUrlSoon();
+}
+
+// Mutate existing material/uniforms in place — no rebuild, no garbage.
+function liveUpdateParam(key, value) {
+  const m = state.material;
+  switch (key) {
+    case 'solidColor':
+      m?.color?.set(value);
+      break;
+    case 'metalness':
+      if (m && 'metalness' in m) m.metalness = value;
+      break;
+    case 'roughness':
+      if (m && 'roughness' in m) m.roughness = value;
+      break;
+    case 'textureScale':
+      if (state.uniforms?.uScale) state.uniforms.uScale.value = 0.04 / Math.max(0.1, value);
+      if (m?.map) {
+        m.map.repeat.setScalar(value);
+        m.map.needsUpdate = true;
+      }
+      break;
+    case 'rotateSpeed':
+      if (state.controls) state.controls.autoRotateSpeed = value;
+      break;
+    case 'backgroundColor':
+      // applied each frame in animate()
+      break;
+  }
+}
+
+// Smooth CSG swap: fade out → rebuild geometry → fade back in.
+let smoothInFlight = false;
+async function smoothShapeRebuild() {
+  if (smoothInFlight) return;
+  smoothInFlight = true;
+  const fadeable = state.material;
+  const startOpacity = fadeable?.opacity ?? 1;
+  const fadeOut = (fadeable && 'opacity' in fadeable)
+    ? new Promise(r => window.gsap.to(fadeable, {
+        opacity: 0.15, duration: 0.12, ease: 'power2.in',
+        onStart: () => { fadeable.transparent = true; },
+        onComplete: r,
+      }))
+    : Promise.resolve();
+  await fadeOut;
+  await rebuildGeometry();
+  if (fadeable && 'opacity' in fadeable) {
+    window.gsap.to(fadeable, {
+      opacity: startOpacity, duration: 0.18, ease: 'power2.out',
+      onComplete: () => {
+        if (startOpacity >= 1) fadeable.transparent = false;
+      },
+    });
+  }
+  smoothInFlight = false;
 }
 
 async function onShaderChange(shaderId, source) {
