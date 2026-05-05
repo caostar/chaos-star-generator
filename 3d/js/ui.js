@@ -54,17 +54,31 @@ function pillsRow(label, options, value, onChange) {
   return row;
 }
 
+// Keys that require re-CSG (geometry rebuild) when changed.
+const SHAPE_KEYS = new Set([
+  'sphereRadius', 'sphereSegments',
+  'shaftRadius', 'shaftLength', 'coneRadius', 'coneLength',
+]);
+
 export function populateShape(container, params, onChange) {
   container.replaceChildren();
   const keys = [
-    'sphereRadius', 'sphereSegments', 'shaftRadiusRatio', 'shaftLengthRatio',
-    'coneRadiusRatio', 'coneLengthRatio', 'rotateSpeed',
+    'globalScale',
+    'sphereRadius', 'sphereSegments',
+    'shaftRadius', 'shaftLength',
+    'coneRadius', 'coneLength',
+    'rotateSpeed',
   ];
   for (const k of keys) {
     const def = PARAM_DEFS[k];
     container.appendChild(slider({
       label: humanize(k), min: def.min, max: def.max, step: def.step, value: params[k],
-      onInput: (v) => onChange(k, v, k.startsWith('shaft') || k.startsWith('cone') || k === 'sphereRadius' || k === 'sphereSegments' ? { shape: true } : {}),
+      onInput: (v) => {
+        const opts = {};
+        if (SHAPE_KEYS.has(k)) opts.shape = true;
+        if (k === 'globalScale')   opts.scale = true;
+        onChange(k, v, opts);
+      },
     }));
   }
 }
@@ -223,6 +237,13 @@ export function populateLighting(container, params, onChange) {
     { label: 'Flat',      value: 'flat'      },
     { label: 'Wireframe', value: 'wireframe' },
   ], params.lighting, (v) => onChange('lighting', v, { material: true })));
+
+  if (params.materialMode === 'shader' && params.lighting !== 'wireframe') {
+    const note = el('div');
+    note.style.cssText = 'font-size:10px; color:rgba(255,255,255,0.45); margin:6px 0 12px; line-height:1.4;';
+    note.textContent = 'Shader mode bakes its own lighting — Shaded/Flat have no effect. Wireframe always works.';
+    container.appendChild(note);
+  }
 
   container.appendChild(slider({
     label: 'Camera distance',

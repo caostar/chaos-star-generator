@@ -20,11 +20,10 @@ const ARROW_DIRS = (() => {
 const UP = new THREE.Vector3(0, 1, 0);
 
 function makeArrowBrushes(params) {
-  const R           = params.sphereRadius;
-  const shaftR      = R * params.shaftRadiusRatio;
-  const shaftLen    = R * params.shaftLengthRatio;
-  const coneR       = R * params.coneRadiusRatio;
-  const coneLen     = R * params.coneLengthRatio;
+  const shaftR   = params.shaftRadius;
+  const shaftLen = params.shaftLength;
+  const coneR    = params.coneRadius;
+  const coneLen  = params.coneLength;
 
   const shaftGeom = new THREE.CylinderGeometry(shaftR, shaftR, shaftLen, 24, 1, false);
   const coneGeom  = new THREE.ConeGeometry(coneR, coneLen, 24, 1, false);

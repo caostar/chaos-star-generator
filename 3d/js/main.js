@@ -160,10 +160,24 @@ async function rebuildMaterial() {
   if (state.material) state.material.dispose();
   state.material = material;
 
+  // Lighting=wireframe overrides any material with a white wireframe so it
+  // works regardless of the chosen material mode.
+  if (params.lighting === 'wireframe') {
+    if (state.material) state.material.dispose();
+    material = new THREE.MeshBasicMaterial({
+      wireframe: true,
+      color: params.materialMode === 'solid' ? new THREE.Color(params.solidColor) : 0x4fc3f7,
+    });
+    material.userData.kind = 'wireframe';
+    state.material = material;
+  }
+
   if (state.mesh) {
     state.mesh.material = material;
+    state.mesh.scale.setScalar(params.globalScale ?? 1);
   } else {
     state.mesh = new THREE.Mesh(state.geometry, material);
+    state.mesh.scale.setScalar(params.globalScale ?? 1);
     state.scene.add(state.mesh);
   }
   // Trigger compilation; check for errors a tick later (Three.js attaches
@@ -418,12 +432,32 @@ function refreshUI() {
 async function onParamChange(key, value, opts = {}) {
   state.params[key] = value;
   if (opts.shape) {
-    // debounce CSG rebuilds during slider drag
     clearTimeout(state.shapeDebounce);
     state.shapeDebounce = setTimeout(() => rebuildGeometry(), 200);
   }
+  if (opts.scale && state.mesh) {
+    state.mesh.scale.setScalar(value);
+  }
+  if (opts.camera && state.camera) {
+    const dir = state.camera.position.clone().normalize();
+    if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
+    state.camera.position.copy(dir.multiplyScalar(value));
+    state.controls.update();
+  }
   if (opts.material) {
+    // Auto-pick a sensible default when switching modes from a "blank" state
+    if (key === 'materialMode') {
+      if (value === 'texture' && state.params.textureMode === 'none') {
+        state.params.textureMode = 'sample';
+      }
+    }
     await rebuildMaterial();
+  }
+  // Discrete switches that change which controls are visible → re-render the
+  // affected tab so the conditional UI (texture grid, color picker, etc.)
+  // appears or disappears.
+  if (['materialMode', 'textureMode', 'lighting', 'triplanar'].includes(key)) {
+    refreshUI();
   }
   syncUrlSoon();
 }

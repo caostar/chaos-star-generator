@@ -1,20 +1,31 @@
-// Chaos Sphere Generator — parameter definitions
+// =============================================================================
+//  TWEAK CONTROL RANGES HERE
+// -----------------------------------------------------------------------------
+//  Every slider in the UI reads its min/max/step/default from this single map.
+//  Change a number here, reload the page — that's it.
+// =============================================================================
 
 export const PARAM_DEFS = {
-  sphereRadius:     { key: 'sr', min: 5,    max: 50,  step: 1,    default: 20    },
-  sphereSegments:   { key: 'ss', min: 16,   max: 128, step: 8,    default: 64    },
-  shaftRadiusRatio: { key: 'cr', min: 0.05, max: 0.4, step: 0.01, default: 0.167 },
-  shaftLengthRatio: { key: 'cl', min: 1,    max: 8,   step: 0.1,  default: 5     },
-  coneRadiusRatio:  { key: 'kr', min: 0.2,  max: 1.0, step: 0.05, default: 0.5   },
-  coneLengthRatio:  { key: 'kl', min: 0.2,  max: 2.0, step: 0.05, default: 0.5   },
-  rotateSpeed:      { key: 'rs', min: 0,    max: 5,   step: 0.1,  default: 1     },
-  cameraDistance:   { key: 'cd', min: 30,   max: 300, step: 1,    default: 120   },
-  textureScale:     { key: 'ts', min: 0.1,  max: 5,   step: 0.05, default: 1     },
+  globalScale:    { key: 'gs', min: 0.2,  max: 3.0,  step: 0.05, default: 1.0   },
+  sphereRadius:   { key: 'sr', min: 1,    max: 60,   step: 1,    default: 20    },
+  sphereSegments: { key: 'ss', min: 16,   max: 128,  step: 8,    default: 64    },
+  shaftRadius:    { key: 'wr', min: 0.5,  max: 20,   step: 0.1,  default: 3.5   },
+  shaftLength:    { key: 'wl', min: 5,    max: 250,  step: 1,    default: 100   },
+  coneRadius:     { key: 'kr', min: 1,    max: 30,   step: 0.5,  default: 10    },
+  coneLength:     { key: 'kl', min: 1,    max: 60,   step: 0.5,  default: 10    },
+  rotateSpeed:    { key: 'rs', min: 0,    max: 5,    step: 0.1,  default: 1     },
+  cameraDistance: { key: 'cd', min: 30,   max: 600,  step: 1,    default: 220   },
+  textureScale:   { key: 'ts', min: 0.1,  max: 5,    step: 0.05, default: 1     },
+  metalness:      { key: 'mt', min: 0,    max: 1,    step: 0.05, default: 0.5   },
+  roughness:      { key: 'rg', min: 0,    max: 1,    step: 0.05, default: 0.4   },
 };
 
+// Which params are numeric (live-tweenable). Anything in PARAM_DEFS is numeric.
 export const NUMERIC_KEYS = Object.keys(PARAM_DEFS);
 
-export const SHADE_PRESETS = ['shaded', 'flat', 'wireframe'];
+// =============================================================================
+//  Defaults / state shape
+// =============================================================================
 
 export function getDefaults() {
   const p = {};
@@ -22,16 +33,14 @@ export function getDefaults() {
   p.backgroundColor = '#000000';
   p.materialMode    = 'shader';   // 'shader' | 'texture' | 'solid'
   p.shaderId        = 'iridescent';
-  p.shaderSource    = null;       // populated only when shaderId === 'custom'
+  p.shaderSource    = null;
   p.solidColor      = '#4fc3f7';
-  p.metalness       = 0.5;
-  p.roughness       = 0.4;
-  p.textureMode     = 'none';     // 'none' | 'sample' | 'custom'
+  p.textureMode     = 'sample';   // 'none' | 'sample' | 'custom'
   p.textureIndex    = 0;
   p.textureOffsetX  = 0;
   p.textureOffsetY  = 0;
   p.triplanar       = false;
-  p.lighting        = 'shaded';
+  p.lighting        = 'shaded';   // 'shaded' | 'flat' | 'wireframe'
   return p;
 }
 
@@ -47,21 +56,20 @@ export function validateParams(input) {
       p[k] = clamp(input[k], def);
     }
   }
-  if (typeof input.backgroundColor === 'string') p.backgroundColor = input.backgroundColor;
-  if (typeof input.solidColor === 'string')      p.solidColor      = input.solidColor;
-  if (typeof input.materialMode === 'string')    p.materialMode    = input.materialMode;
-  if (typeof input.shaderId === 'string')        p.shaderId        = input.shaderId;
-  if (typeof input.shaderSource === 'string')    p.shaderSource    = input.shaderSource;
-  if (typeof input.textureMode === 'string')     p.textureMode     = input.textureMode;
-  if (typeof input.textureIndex === 'number')    p.textureIndex    = input.textureIndex;
-  if (typeof input.textureOffsetX === 'number')  p.textureOffsetX  = input.textureOffsetX;
-  if (typeof input.textureOffsetY === 'number')  p.textureOffsetY  = input.textureOffsetY;
-  if (typeof input.triplanar === 'boolean')      p.triplanar       = input.triplanar;
-  if (typeof input.lighting === 'string')        p.lighting        = input.lighting;
-  if (typeof input.metalness === 'number')       p.metalness       = input.metalness;
-  if (typeof input.roughness === 'number')       p.roughness       = input.roughness;
+  for (const k of [
+    'backgroundColor', 'solidColor', 'materialMode', 'shaderId',
+    'shaderSource', 'textureMode', 'lighting',
+  ]) if (typeof input[k] === 'string') p[k] = input[k];
+  for (const k of ['textureIndex', 'textureOffsetX', 'textureOffsetY']) {
+    if (typeof input[k] === 'number') p[k] = input[k];
+  }
+  if (typeof input.triplanar === 'boolean') p.triplanar = input.triplanar;
   return p;
 }
+
+// =============================================================================
+//  Random generator — biased toward visually-balanced designs
+// =============================================================================
 
 const BUILTIN_SHADERS = [
   'iridescent', 'plasma', 'voronoi', 'psychedelic',
@@ -73,18 +81,19 @@ function pick(arr)      { return arr[Math.floor(Math.random() * arr.length)]; }
 
 export function generateRandomParams() {
   const p = getDefaults();
-  p.sphereRadius     = Math.round(rand(12, 30));
-  p.shaftRadiusRatio = +rand(0.08, 0.25).toFixed(2);
-  p.shaftLengthRatio = +rand(2.5, 6).toFixed(1);
-  p.coneRadiusRatio  = +rand(0.35, 0.8).toFixed(2);
-  p.coneLengthRatio  = +rand(0.4, 1.2).toFixed(2);
-  p.rotateSpeed      = +rand(0.3, 2.5).toFixed(2);
+  p.globalScale  = +rand(0.7, 1.3).toFixed(2);
+  p.sphereRadius = Math.round(rand(12, 35));
+  p.shaftRadius  = +rand(2, 6).toFixed(1);
+  p.shaftLength  = Math.round(rand(60, 150));
+  p.coneRadius   = +rand(7, 16).toFixed(1);
+  p.coneLength   = +rand(8, 22).toFixed(1);
+  p.rotateSpeed  = +rand(0.3, 2.5).toFixed(2);
 
   const r = Math.random();
-  if (r < 0.7) {
+  if (r < 0.65) {
     p.materialMode = 'shader';
     p.shaderId     = pick(BUILTIN_SHADERS);
-  } else if (r < 0.9) {
+  } else if (r < 0.85) {
     p.materialMode = 'solid';
     const h = Math.random() * 360, s = 60 + Math.random() * 30, l = 45 + Math.random() * 20;
     p.solidColor = hslToHex(h, s, l);
@@ -92,7 +101,7 @@ export function generateRandomParams() {
     p.materialMode = 'texture';
     p.textureMode  = 'sample';
     p.textureIndex = Math.floor(Math.random() * 28);
-    p.triplanar    = Math.random() < 0.5;
+    p.triplanar    = Math.random() < 0.6;
   }
   return p;
 }
