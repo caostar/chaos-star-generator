@@ -118,6 +118,56 @@ Every parameter — geometry, gradient stops, gradient type, background, sample 
 
 Manifest is configured for installable PWA — open in Safari/Chrome on mobile, "Add to Home Screen", and it launches chromeless against a black splash.
 
+## Phase 2: Chaos Spheres (`/3d/`)
+
+The 3D companion app, hosted at `https://caostar.com/3d/`, that lets users build, customize, share, and **3D-print** chaos spheres — the volumetric Symbol of Chaos.
+
+A central sphere with 4 arrows (cylinder shaft + cone tip) at tetrahedral angles, CSG-unioned into a single watertight `BufferGeometry` so an applied texture wraps the whole object continuously and STL output is printable.
+
+### 3D-specific features
+
+- 🔮 **Three.js** WebGL rendering with `OrbitControls` (drag to orbit, wheel/pinch to zoom, two-finger to pan)
+- ⚡ **Live ShaderToy-compatible GLSL editor** — paste any `mainImage()` shader from shadertoy.com
+- 🎨 **8 built-in fragment shaders** — iridescent, plasma, voronoi, psychedelic, matrix, lava, crystalline, starfield
+- 🖼 **Texture mode** reuses the 2D app's 28 sample textures (with optional triplanar wrapping for sigil-style images)
+- 🧊 **Shaded / Flat / Wireframe** lighting modes
+- 🖨 **Export to STL, GLB, OBJ, and 3MF** — drop the STL straight into PrusaSlicer or Bambu Studio
+- 🔗 **Share URLs include custom shader source** (gzip + base64 inside `?design=`) for end-to-end shareability
+- ⏪ **Browser history** + Inspire mode push history entries, just like the 2D app
+- 📱 **PWA** — separate "Add to Home Screen" experience installable independently from the 2D app
+
+### 3D project layout
+
+```
+3d/
+  index.html                          ← entry point
+  manifest.webmanifest
+  css/styles.css                      ← @imports tokens from ../chaos-star-generator-files/css/styles.css
+  js/
+    main.js                           ← bootstrap, UI wiring, render loop
+    sphere-builder.js                 ← CSG union → unified BufferGeometry with spherical UVs
+    parameters.js                     ← param defs, defaults, random generator
+    animation.js                      ← GSAP-based tweener
+    shader-manager.js                 ← built-in catalog + ShaderToy adapter
+    ui.js                             ← Shape / Material / Shader / Lighting / Actions panels
+    url-codec-3d.js                   ← extends 2D codec with gzipped custom shader source
+    exporters.js                      ← STL / GLB / OBJ / 3MF
+  shaders/
+    common/{vertex.glsl,shadertoy-wrapper.frag}
+    builtin/                          ← 8 fragment shaders
+```
+
+### Tech (3D-specific)
+
+- [Three.js](https://threejs.org/) `0.169.0` — geometry, materials, OrbitControls, exporters
+- [`three-bvh-csg`](https://github.com/gkjohnson/three-bvh-csg) — boolean union of sphere + arrows
+- [`fflate`](https://github.com/101arrowz/fflate) — gzip (URL shader compression) + 3MF zip writing
+- ESM via `<script type="importmap">` from CDN — no build step, same zero-tooling philosophy
+
+### 3D printing
+
+The CSG'd geometry is watertight and slicer-ready. STL is the safest format (raw triangles); 3MF is recommended if you want the model's color baked into the print on a multi-material printer.
+
 ## Credits
 
 Inspired by the original [caostar.com](https://caostar.com/thoughts/the-chaos-star-generator/2013/03/) by AD. This is a from-scratch reimplementation.

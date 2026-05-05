@@ -1,0 +1,139 @@
+/* Chaos Sphere Generator — reuses the visual tokens from the 2D app. */
+@import url('../../chaos-star-generator-files/css/styles.css');
+
+#sphereCanvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+  background: #000;
+  cursor: grab;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+#sphereCanvas:active { cursor: grabbing; }
+
+/* Export grid */
+.export-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 10px;
+}
+.export-btn { width: 100%; }
+
+/* Shader editor */
+.shader-editor-wrap {
+  position: relative;
+  background: #050505;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  margin-top: 8px;
+}
+.shader-editor {
+  width: 100%;
+  min-height: 220px;
+  background: transparent;
+  color: #d8e6f5;
+  font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  padding: 8px 8px 8px 36px;
+  border: 0;
+  resize: vertical;
+  white-space: pre;
+  outline: none;
+  tab-size: 2;
+}
+.shader-line-numbers {
+  position: absolute;
+  top: 8px;
+  left: 6px;
+  width: 24px;
+  color: rgba(255,255,255,0.25);
+  font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: right;
+  pointer-events: none;
+  user-select: none;
+}
+.shader-error {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: rgba(220, 50, 60, 0.15);
+  border-left: 2px solid #d33c3c;
+  color: #ffb0b0;
+  font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
+  font-size: 10px;
+  white-space: pre-wrap;
+  display: none;
+}
+.shader-error.visible { display: block; }
+
+.shader-toolbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.shader-toolbar select,
+.shader-toolbar input {
+  flex: 1;
+  background: rgba(0,0,0,0.5);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #d8e6f5;
+  padding: 4px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-family: 'SF Mono', monospace;
+}
+
+/* Texture grid (mirrors 2D layout) */
+.tex-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-top: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.tex-tile {
+  aspect-ratio: 1;
+  border-radius: 3px;
+  cursor: pointer;
+  background-size: cover;
+  background-position: center;
+  border: 2px solid transparent;
+  transition: border-color 0.15s, filter 0.15s;
+}
+.tex-tile:hover    { filter: brightness(1.2); }
+.tex-tile.selected { border-color: #4fc3f7; }
+
+/* Mode chooser pills */
+.mode-pills {
+  display: flex;
+  gap: 4px;
+  margin: 6px 0;
+  background: rgba(0,0,0,0.4);
+  padding: 3px;
+  border-radius: 4px;
+}
+.mode-pill {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  color: rgba(255,255,255,0.55);
+  padding: 5px 8px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.15s;
+}
+.mode-pill.active {
+  background: rgba(79, 195, 247, 0.18);
+  color: #4fc3f7;
+}
