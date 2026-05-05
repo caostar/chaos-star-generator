@@ -262,18 +262,19 @@ function setupCanvasTap() {
       return;
     }
 
-    // Touch: if the second touchstart already flagged a double-tap, run it.
+    // Touch: a confirmed double-tap fires the random star; a single tap
+    // (after the double-tap window closes with no second touch) toggles
+    // controls — opposite of desktop because tapping is the primary
+    // mobile gesture and toggling controls is more frequent than randomizing.
     if (isDoubleTap) {
       isDoubleTap = false;
-      toggleControls();
+      generateOneRandomStar();
       return;
     }
-    // Otherwise schedule a single-tap action; a fast follow-up touchstart
-    // will cancel this and switch to double-tap mode.
     lastTapEndTime = performance.now();
     pendingTapTimer = setTimeout(() => {
       pendingTapTimer = null;
-      generateOneRandomStar();
+      toggleControls();
     }, DOUBLE_TAP_MS);
   }
 

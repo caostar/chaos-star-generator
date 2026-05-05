@@ -70,7 +70,9 @@ ES modules require a real HTTP server; `file://` won't work.
 
 | Gesture | Action |
 |---|---|
-| Tap / click canvas | Random star |
+| Click canvas (desktop) | Random star |
+| Tap canvas (mobile) | Toggle controls |
+| Double-tap canvas (mobile) | Random star |
 | Hold canvas (mobile) | Open share sheet → Save to Photos |
 | Hold canvas (desktop) | Download PNG |
 | Pinch | Zoom star |
