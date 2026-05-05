@@ -724,6 +724,10 @@ body.texture-drag #starCanvas:active { cursor: grabbing; }
     right: 8px;
     width: auto;
     max-width: calc(100vw - 16px);
+    /* Transparent panel on mobile so the star stays visible while editing */
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
   .cp-body {
     width: 100%;
