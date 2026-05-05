@@ -26,19 +26,19 @@ html, body {
   user-select: none;
 }
 
-/* --- Bottom info --- */
-#bottomInfos {
+/* --- "Know more" link (matches caostar /chaos-follows-you/) --- */
+#know-more-link {
   position: fixed;
-  bottom: 8px;
-  right: 12px;
-  z-index: 10;
-  pointer-events: none;
+  bottom: 12px;
+  right: 16px;
+  color: rgba(255, 255, 255, 0.35);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  text-decoration: none;
+  z-index: 10000;
+  transition: color 0.2s;
 }
-.simpleText {
-  font-size: 10px;
-  color: #555;
-  letter-spacing: 0.5px;
-}
+#know-more-link:hover { color: rgba(79, 195, 247, 0.8); }
 
 /* --- Glass control panel (matches caostar /chaos-follows-you/) --- */
 .cp-panel {
@@ -466,7 +466,7 @@ body.texture-drag #starCanvas:active { cursor: grabbing; }
 
 /* Hide controls (H key) */
 .controls-hidden #controls-panel,
-.controls-hidden #bottomInfos { display: none; }
+.controls-hidden #know-more-link { display: none; }
 
 /* Toast */
 #toast {
@@ -755,7 +755,8 @@ body.texture-drag #starCanvas:active { cursor: grabbing; }
   .gradient-stops-list { max-height: 180px; }
   .gradient-stop-row { grid-template-columns: 36px 1fr 36px 24px; gap: 8px; }
 
-  #bottomInfos { display: none; }
+  /* On mobile, panel can sit at the bottom; nudge link out of overlap */
+  #know-more-link { bottom: 8px; right: 10px; font-size: 10px; }
 
   /* Welcome modal */
   .wm-card {
