@@ -1,6 +1,6 @@
 // Plasma — classic sine-mix
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-  vec2 p = vObjectPos.xy * 0.08 + vObjectPos.z * 0.05;
+  vec2 p = vWorldPos.xy * 0.012 + vWorldPos.z * 0.008;
   float t = iTime * 0.5;
   float v = sin(p.x + t) + sin(p.y * 1.3 + t * 1.1) + sin((p.x + p.y) * 0.7 + t * 0.7);
   v += sin(length(p) * 1.5 - t);

@@ -9,7 +9,7 @@ float noise3(vec3 p) {
                  mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
 }
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-  vec3 p = vObjectPos * 0.18;
+  vec3 p = vWorldPos * 0.018;
   float t = iTime * 0.2;
   float n = 0.0; float amp = 0.5;
   for (int i = 0; i < 5; i++) { n += amp * noise3(p + vec3(0.0, t, 0.0)); p *= 2.0; amp *= 0.5; }

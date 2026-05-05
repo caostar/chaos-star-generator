@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 import { getDefaults, generateRandomParams, PARAM_DEFS, NUMERIC_KEYS, validateParams } from './parameters.js';
-import { buildChaosSphereGeometry } from './sphere-builder.js';
+import { ChaosphereMesh } from './chaosphere-mesh.js';
 import {
   loadVertex, loadWrapper, loadTriplanar, resolveShader, listBuiltins, fetchShaderToy,
 } from './shader-manager.js';
@@ -20,36 +20,28 @@ const state = {
   camera:   null,
   renderer: null,
   controls: null,
-  mesh:     null,
+  chaosphere: null,    // ChaosphereMesh (Group)
   material: null,
   uniforms: null,
-  geometry: null,
   lights:   null,
-  textureMap: null,
   inspireActive: false,
   inspireTimer:  null,
   speedMs: 1700,
-  rebuildScheduled: false,
-  shapeRebuildScheduled: false,
-  lastShaderSource: null,
-  lastTouchTs: 0,
   startTs: performance.now(),
 };
 
-window.__chaosphere = state; // debug handle
+window.__chaosphere = state;
 window.__rebuildMaterial = async () => rebuildMaterial();
-window.__rebuildGeometry = async () => rebuildGeometry();
 window.__refreshUI       = () => refreshUI();
 
 init();
 
 async function init() {
   installShaderErrorCapture();
-  const fromUrl = loadFromUrl();
-  state.params = fromUrl || generateRandomParams();
+  state.params = loadFromUrl() || generateRandomParams();
 
   setupRenderer();
-  await rebuildGeometry();
+  setupChaosphere();
   await rebuildMaterial();
   setupLights();
   setupControls();
@@ -81,21 +73,30 @@ function onResize() {
   state.camera.updateProjectionMatrix();
 }
 
-async function rebuildGeometry() {
-  const geom = buildChaosSphereGeometry(state.params);
-  if (state.geometry) state.geometry.dispose();
-  state.geometry = geom;
-  if (state.mesh) state.mesh.geometry = geom;
+function setupChaosphere() {
+  state.chaosphere = new ChaosphereMesh();
+  state.chaosphere.scale.setScalar(state.params.globalScale ?? 1);
+  state.chaosphere.update(state.params);
+  state.scene.add(state.chaosphere);
 }
+
+/* ---------- Material ----------------------------------------------------- */
 
 async function rebuildMaterial() {
   const params = state.params;
   let material;
-  state.lastShaderError = null;
 
-  if (params.materialMode === 'shader') {
-    const { vertex, fragment, source } = await resolveShader(params);
-    state.lastShaderSource = source;
+  if (params.lighting === 'wireframe') {
+    material = new THREE.MeshBasicMaterial({
+      wireframe: true,
+      color: params.materialMode === 'solid'
+        ? new THREE.Color(params.solidColor)
+        : new THREE.Color(0x4fc3f7),
+    });
+    material.userData.kind = 'wireframe';
+    state.uniforms = null;
+  } else if (params.materialMode === 'shader') {
+    const { vertex, fragment } = await resolveShader(params);
     state.uniforms = makeUniforms();
     material = new THREE.ShaderMaterial({
       uniforms: state.uniforms,
@@ -109,18 +110,15 @@ async function rebuildMaterial() {
     hideShaderError();
   } else if (params.materialMode === 'texture') {
     const tex = await loadActiveTexture();
-    if (!tex || params.lighting === 'wireframe') {
-      material = new THREE.MeshBasicMaterial({
-        wireframe: params.lighting === 'wireframe',
-        color: tex ? 0xffffff : 0x4fc3f7,
-        map: !tex ? null : (params.lighting === 'wireframe' ? null : tex),
-      });
+    if (!tex) {
+      material = new THREE.MeshStandardMaterial({ color: 0x4fc3f7,
+        metalness: params.metalness, roughness: params.roughness });
     } else if (params.triplanar) {
-      const vertex = await loadVertex();
+      const vertex   = await loadVertex();
       const fragment = await loadTriplanar();
       state.uniforms = {
         uTex:      { value: tex },
-        uScale:    { value: 0.04 / Math.max(0.1, params.textureScale) },
+        uScale:    { value: 0.005 / Math.max(0.1, params.textureScale) },
         uOffset:   { value: new THREE.Vector2(params.textureOffsetX, params.textureOffsetY) },
         uLightDir: { value: new THREE.Vector3(0.5, 1.0, 0.7).normalize() },
         uShaded:   { value: params.lighting === 'flat' ? 0 : 1 },
@@ -133,118 +131,40 @@ async function rebuildMaterial() {
       });
     } else if (params.lighting === 'flat') {
       material = new THREE.MeshBasicMaterial({ map: tex, color: 0xffffff });
+      state.uniforms = null;
     } else {
       material = new THREE.MeshStandardMaterial({
-        map: tex,
-        color: 0xffffff,
-        metalness: params.metalness,
-        roughness: params.roughness,
+        map: tex, color: 0xffffff,
+        metalness: params.metalness, roughness: params.roughness,
       });
+      state.uniforms = null;
     }
     material.userData.kind = 'texture';
   } else {
-    if (params.lighting === 'wireframe') {
-      material = new THREE.MeshBasicMaterial({ wireframe: true, color: new THREE.Color(params.solidColor) });
-    } else if (params.lighting === 'flat') {
+    // solid
+    if (params.lighting === 'flat') {
       material = new THREE.MeshBasicMaterial({ color: new THREE.Color(params.solidColor) });
     } else {
       material = new THREE.MeshStandardMaterial({
         color: new THREE.Color(params.solidColor),
-        metalness: params.metalness,
-        roughness: params.roughness,
+        metalness: params.metalness, roughness: params.roughness,
       });
     }
     material.userData.kind = 'solid';
+    state.uniforms = null;
   }
 
   if (state.material) state.material.dispose();
   state.material = material;
-
-  // Lighting=wireframe overrides any material with a white wireframe so it
-  // works regardless of the chosen material mode.
-  if (params.lighting === 'wireframe') {
-    if (state.material) state.material.dispose();
-    material = new THREE.MeshBasicMaterial({
-      wireframe: true,
-      color: params.materialMode === 'solid' ? new THREE.Color(params.solidColor) : 0x4fc3f7,
-    });
-    material.userData.kind = 'wireframe';
-    state.material = material;
-  }
-
-  if (state.mesh) {
-    state.mesh.material = material;
-    state.mesh.scale.setScalar(params.globalScale ?? 1);
-  } else {
-    state.mesh = new THREE.Mesh(state.geometry, material);
-    state.mesh.scale.setScalar(params.globalScale ?? 1);
-    state.scene.add(state.mesh);
-  }
-  // Trigger compilation; check for errors a tick later (Three.js attaches
-  // material.program after the next render).
-  setTimeout(() => checkShaderErrors(), 50);
-}
-
-function checkShaderErrors() { /* now driven by installShaderErrorCapture */ }
-
-// Hook console.error to detect THREE.WebGLProgram shader errors. When one
-// fires while we're in shader mode with custom code, surface the GLSL error
-// in the editor and revert to the last-good shader so the canvas keeps rendering.
-function installShaderErrorCapture() {
-  const origError = console.error.bind(console);
-  let suppressedSince = 0;
-  console.error = (...args) => {
-    const first = typeof args[0] === 'string' ? args[0] : '';
-    if (first.startsWith('THREE.WebGLProgram')) {
-      const log = args.join('\n');
-      const concise = extractGlslErrors(log);
-      // Throttle to one per second; Three.js re-fires every frame
-      const now = performance.now();
-      if (now - suppressedSince > 1000) {
-        suppressedSince = now;
-        showShaderError(concise);
-        revertToLastGoodShader();
-      }
-      return;
-    }
-    origError(...args);
-  };
-}
-
-function extractGlslErrors(log) {
-  const lines = log.split('\n');
-  return lines.filter(l => /^ERROR:/.test(l.trim())).slice(0, 6).join('\n')
-      || log.slice(0, 600);
-}
-
-function revertToLastGoodShader() {
-  const last = state.lastGoodShader;
-  if (!last || !state.material || state.material.type !== 'ShaderMaterial') return;
-  state.material.fragmentShader = last.fragment;
-  state.material.vertexShader   = last.vertex;
-  state.material.needsUpdate = true;
-}
-
-function showShaderError(log) {
-  const el = document.getElementById('shaderError');
-  if (!el) return;
-  // Strip Three.js internal prefix lines, keep just GLSL errors
-  const concise = log.split('\n')
-    .filter(line => /ERROR|WARN|^\d/.test(line))
-    .slice(0, 10).join('\n');
-  el.textContent = concise || log.slice(0, 800);
-  el.classList.add('visible');
-}
-function hideShaderError() {
-  document.getElementById('shaderError')?.classList.remove('visible');
+  state.chaosphere.setMaterial(material);
 }
 
 function makeUniforms() {
   return {
-    iTime:        { value: 0 },
-    iResolution:  { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1) },
-    iMouse:       { value: new THREE.Vector4() },
-    iChannel0:    { value: null },
+    iTime:           { value: 0 },
+    iResolution:     { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1) },
+    iMouse:          { value: new THREE.Vector4() },
+    iChannel0:       { value: null },
     iChannel0Active: { value: 0 },
   };
 }
@@ -256,12 +176,14 @@ async function loadActiveTexture() {
   return null;
 }
 
+/* ---------- Lights / OrbitControls --------------------------------------- */
+
 function setupLights() {
   const grp = new THREE.Group();
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x222244, 0.85);
-  const dir  = new THREE.DirectionalLight(0xffffff, 1.0);
+  grp.add(new THREE.HemisphereLight(0xffffff, 0x222244, 0.85));
+  const dir = new THREE.DirectionalLight(0xffffff, 1.0);
   dir.position.set(60, 80, 100);
-  grp.add(hemi, dir);
+  grp.add(dir);
   state.scene.add(grp);
   state.lights = grp;
 }
@@ -281,10 +203,16 @@ function setupControls() {
   state.controls.addEventListener('start', () => stopInspire());
 }
 
+/* ---------- Per-frame loop ----------------------------------------------- */
+
 function animate() {
   requestAnimationFrame(animate);
   const t = (performance.now() - state.startTs) / 1000;
-  if (state.uniforms) {
+  // Cheap parametric update: sets scales and positions only.
+  state.chaosphere.update(state.params);
+  state.chaosphere.scale.setScalar(state.params.globalScale ?? 1);
+
+  if (state.uniforms?.iTime) {
     state.uniforms.iTime.value = t;
     state.uniforms.iResolution.value.set(window.innerWidth, window.innerHeight, 1);
   }
@@ -294,21 +222,60 @@ function animate() {
   state.renderer.render(state.scene, state.camera);
 }
 
-/* ---------- Inspire mode ---------- */
+/* ---------- Shader error capture (unchanged) ----------------------------- */
+
+function installShaderErrorCapture() {
+  const origError = console.error.bind(console);
+  let last = 0;
+  console.error = (...args) => {
+    const first = typeof args[0] === 'string' ? args[0] : '';
+    if (first.startsWith('THREE.WebGLProgram')) {
+      const log = args.join('\n');
+      const now = performance.now();
+      if (now - last > 1000) {
+        last = now;
+        showShaderError(extractGlslErrors(log));
+        revertToLastGoodShader();
+      }
+      return;
+    }
+    origError(...args);
+  };
+}
+function extractGlslErrors(log) {
+  return log.split('\n').filter(l => /^ERROR:/.test(l.trim())).slice(0, 6).join('\n')
+      || log.slice(0, 600);
+}
+function revertToLastGoodShader() {
+  const last = state.lastGoodShader;
+  if (!last || !state.material || state.material.type !== 'ShaderMaterial') return;
+  state.material.fragmentShader = last.fragment;
+  state.material.vertexShader   = last.vertex;
+  state.material.needsUpdate = true;
+}
+function showShaderError(log) {
+  const el = document.getElementById('shaderError');
+  if (!el) return;
+  el.textContent = log;
+  el.classList.add('visible');
+}
+function hideShaderError() {
+  document.getElementById('shaderError')?.classList.remove('visible');
+}
+
+/* ---------- Inspire mode ------------------------------------------------- */
 
 function startInspire() {
   state.inspireActive = true;
   document.getElementById('reRandom')?.classList.add('active');
   scheduleNextInspire(0);
 }
-
 function stopInspire() {
   if (!state.inspireActive) return;
   state.inspireActive = false;
   document.getElementById('reRandom')?.classList.remove('active');
   if (state.inspireTimer) { clearTimeout(state.inspireTimer); state.inspireTimer = null; }
 }
-
 function scheduleNextInspire(delay = state.speedMs) {
   if (!state.inspireActive) return;
   state.inspireTimer = setTimeout(async () => {
@@ -318,44 +285,32 @@ function scheduleNextInspire(delay = state.speedMs) {
   }, delay);
 }
 
-/* ---------- Transitions ---------- */
+/* ---------- Transitions (used by inspire / popstate / Space) ------------ */
 
 const tweener = new Tweener({
   params: null,
-  onUpdate: () => {
-    state.rebuildScheduled = true;
-  },
-  onShapeUpdate: () => { state.shapeRebuildScheduled = true; },
+  onUpdate: () => { /* params mutate; animate() picks them up */ },
+  onShapeUpdate: () => {},
 });
 
 async function transitionTo(target, durationMs = state.speedMs, urlMode = 'push') {
   const next = validateParams({ ...state.params, ...target });
-  // Apply non-numeric immediately and rebuild material first so the tween
-  // shows the new look right away.
-  const numericTarget = {};
-  for (const k of NUMERIC_KEYS) numericTarget[k] = next[k];
+  // Apply non-numeric immediately
   for (const k of Object.keys(next)) {
     if (!NUMERIC_KEYS.includes(k)) state.params[k] = next[k];
   }
   await rebuildMaterial();
-  // also rebuild geometry if shape changed at the discrete level (segments)
-  await rebuildGeometry();
 
+  // GSAP-tween numeric params; animate() reads them every frame.
+  const numericTarget = {};
+  for (const k of NUMERIC_KEYS) numericTarget[k] = next[k];
   tweener.params = state.params;
   tweener.to(numericTarget, durationMs);
-
-  // shape geometry rebuilds happen after tween completes (avoids per-frame CSG)
-  setTimeout(() => {
-    if (state.shapeRebuildScheduled) {
-      state.shapeRebuildScheduled = false;
-      rebuildGeometry();
-    }
-  }, durationMs + 50);
 
   syncUrlSoon(urlMode);
 }
 
-/* ---------- URL sync (1s debounce, 3s session) ---------- */
+/* ---------- URL sync ----------------------------------------------------- */
 
 let urlDebounce = null;
 function syncUrlSoon(mode = 'auto') {
@@ -376,13 +331,12 @@ function setupHistory() {
     await transitionTo(fromUrl, 700, 'replace');
     refreshUI();
   });
-  window.addEventListener('pagehide', () => { endSession(); });
+  window.addEventListener('pagehide', () => endSession());
 }
 
-/* ---------- UI wiring ---------- */
+/* ---------- UI wiring --------------------------------------------------- */
 
 function setupUI() {
-  // Tab switching
   document.querySelectorAll('.ctrl-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.ctrl-tab').forEach(b => b.classList.remove('active'));
@@ -392,7 +346,6 @@ function setupUI() {
     });
   });
 
-  // Header click toggles body
   const cpBody = document.getElementById('cpBody');
   document.getElementById('cpTabHeader')?.addEventListener('click', () => {
     cpBody.style.display = cpBody.style.display === 'none' ? '' : 'none';
@@ -412,7 +365,10 @@ function setupUI() {
 
   document.querySelectorAll('.export-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      exportSphere(btn.dataset.fmt, state).catch(err => toast(err.message));
+      toast(`Preparing ${btn.dataset.fmt.toUpperCase()}…`);
+      exportSphere(btn.dataset.fmt, state)
+        .then(() => toast(`Exported chaos-sphere.${btn.dataset.fmt}`))
+        .catch(err => toast(err.message));
     });
   });
   document.getElementById('copyUrlBtn')?.addEventListener('click', () => {
@@ -432,108 +388,42 @@ function refreshUI() {
 async function onParamChange(key, value, opts = {}) {
   state.params[key] = value;
 
-  // Live-update path: mutate existing material/uniforms in place. Used for
-  // anything that can be tweaked without recreating the material — keeps
-  // slider drags buttery smooth.
+  // Per-frame animate() picks up shape changes for free — no rebuild.
+  // Live updates mutate existing material/uniforms in place.
   if (opts.live) {
     liveUpdateParam(key, value);
-    syncUrlSoon();
-    return;
-  }
-
-  if (opts.shape) {
-    // Smooth CSG swap: fade material out, rebuild, fade back in.
-    clearTimeout(state.shapeDebounce);
-    state.shapeDebounce = setTimeout(() => smoothShapeRebuild(), 220);
-  }
-  if (opts.scale && state.mesh) {
-    // GSAP-tween mesh.scale from current to target so globalScale slider feels fluid
-    window.gsap.killTweensOf(state.mesh.scale);
-    window.gsap.to(state.mesh.scale, {
-      x: value, y: value, z: value,
-      duration: 0.18, ease: 'power2.out',
-      overwrite: 'auto',
-    });
-  }
-  if (opts.camera && state.camera) {
-    window.gsap.killTweensOf(state.camera.position);
+  } else if (opts.camera && state.camera) {
     const dir = state.camera.position.clone().normalize();
     if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
-    const target = dir.multiplyScalar(value);
-    window.gsap.to(state.camera.position, {
-      x: target.x, y: target.y, z: target.z,
-      duration: 0.25, ease: 'power2.out',
-      onUpdate: () => state.controls.update(),
-    });
-  }
-  if (opts.material) {
-    if (key === 'materialMode') {
-      if (value === 'texture' && state.params.textureMode === 'none') {
-        state.params.textureMode = 'sample';
-      }
+    state.camera.position.copy(dir.multiplyScalar(value));
+    state.controls.update();
+  } else if (opts.material) {
+    if (key === 'materialMode' && value === 'texture'
+        && state.params.textureMode === 'none') {
+      state.params.textureMode = 'sample';
     }
     await rebuildMaterial();
   }
+
   if (['materialMode', 'textureMode', 'lighting', 'triplanar'].includes(key)) {
     refreshUI();
   }
   syncUrlSoon();
 }
 
-// Mutate existing material/uniforms in place — no rebuild, no garbage.
 function liveUpdateParam(key, value) {
   const m = state.material;
   switch (key) {
-    case 'solidColor':
-      m?.color?.set(value);
-      break;
-    case 'metalness':
-      if (m && 'metalness' in m) m.metalness = value;
-      break;
-    case 'roughness':
-      if (m && 'roughness' in m) m.roughness = value;
-      break;
+    case 'solidColor':   m?.color?.set(value); break;
+    case 'metalness':    if (m && 'metalness' in m) m.metalness = value; break;
+    case 'roughness':    if (m && 'roughness' in m) m.roughness = value; break;
     case 'textureScale':
-      if (state.uniforms?.uScale) state.uniforms.uScale.value = 0.04 / Math.max(0.1, value);
-      if (m?.map) {
-        m.map.repeat.setScalar(value);
-        m.map.needsUpdate = true;
-      }
+      if (state.uniforms?.uScale) state.uniforms.uScale.value = 0.005 / Math.max(0.1, value);
+      if (m?.map) { m.map.repeat.setScalar(value); m.map.needsUpdate = true; }
       break;
-    case 'rotateSpeed':
-      if (state.controls) state.controls.autoRotateSpeed = value;
-      break;
-    case 'backgroundColor':
-      // applied each frame in animate()
-      break;
+    case 'rotateSpeed':  if (state.controls) state.controls.autoRotateSpeed = value; break;
+    case 'backgroundColor': /* applied each frame in animate() */ break;
   }
-}
-
-// Smooth CSG swap: fade out → rebuild geometry → fade back in.
-let smoothInFlight = false;
-async function smoothShapeRebuild() {
-  if (smoothInFlight) return;
-  smoothInFlight = true;
-  const fadeable = state.material;
-  const startOpacity = fadeable?.opacity ?? 1;
-  const fadeOut = (fadeable && 'opacity' in fadeable)
-    ? new Promise(r => window.gsap.to(fadeable, {
-        opacity: 0.15, duration: 0.12, ease: 'power2.in',
-        onStart: () => { fadeable.transparent = true; },
-        onComplete: r,
-      }))
-    : Promise.resolve();
-  await fadeOut;
-  await rebuildGeometry();
-  if (fadeable && 'opacity' in fadeable) {
-    window.gsap.to(fadeable, {
-      opacity: startOpacity, duration: 0.18, ease: 'power2.out',
-      onComplete: () => {
-        if (startOpacity >= 1) fadeable.transparent = false;
-      },
-    });
-  }
-  smoothInFlight = false;
 }
 
 async function onShaderChange(shaderId, source) {
@@ -543,20 +433,16 @@ async function onShaderChange(shaderId, source) {
   await rebuildMaterial();
   syncUrlSoon();
 }
-
 async function onShaderToyImport(url) {
   try {
     const code = await fetchShaderToy(url);
-    if (code.length > SHADER_SOURCE_MAX) {
-      toast(`Shader exceeds ${SHADER_SOURCE_MAX} byte URL limit`);
-    }
+    if (code.length > SHADER_SOURCE_MAX) toast(`Shader exceeds ${SHADER_SOURCE_MAX} byte URL limit`);
     await onShaderChange('custom', code);
     refreshUI();
   } catch (e) {
     toast(`ShaderToy import failed: ${e.message}`);
   }
 }
-
 async function onTextureUpload(file) {
   if (!file) return;
   if (!file.type.startsWith('image/')) { toast('That doesn\'t look like an image'); return; }
@@ -570,13 +456,11 @@ async function onTextureUpload(file) {
   toast('Custom texture applied — won\'t travel through share URL');
 }
 
-/* ---------- Gestures ---------- */
+/* ---------- Gestures ---------------------------------------------------- */
 
 function setupCanvasGestures() {
   const canvas = state.renderer.domElement;
-  let lastTap = 0;
-  let pressTimer = null;
-  let pressed = false;
+  let lastTap = 0, pressTimer = null, pressed = false;
 
   canvas.addEventListener('touchstart', (e) => {
     if (e.touches.length !== 1) {
@@ -585,15 +469,12 @@ function setupCanvasGestures() {
     }
     state.lastTouchTs = performance.now();
     pressed = true;
-    // Long press → save STL (or share on mobile)
     pressTimer = setTimeout(() => {
       if (!pressed) return;
       pressTimer = null;
       exportSphere('stl', state).catch(err => toast(err.message));
-      toast('Exported STL');
+      toast('Exporting STL…');
     }, 700);
-
-    // Double tap → toggle controls (matches 2D app's mobile UX)
     const now = performance.now();
     if (now - lastTap < 350) {
       e.preventDefault();
@@ -612,9 +493,8 @@ function setupCanvasGestures() {
 
 function setupGestures() {
   setupCanvasGestures();
-  // Space → random / Click → random / R → toggle inspire / F → fullscreen / H → hide controls
   window.addEventListener('keydown', (e) => {
-    if (e.target?.matches('input, textarea, select')) return;
+    if (e.target?.matches?.('input, textarea, select')) return;
     if (e.code === 'Space') { e.preventDefault(); transitionTo(generateRandomParams(), state.speedMs, 'push'); }
     else if (e.key === 'r' || e.key === 'R') { state.inspireActive ? stopInspire() : startInspire(); }
     else if (e.key === 'f' || e.key === 'F') { toggleFullscreen(); }
@@ -638,7 +518,7 @@ function toggleControls() {
   document.body.classList.toggle('controls-hidden');
 }
 
-/* ---------- Toast ---------- */
+/* ---------- Toast ------------------------------------------------------- */
 
 let toastTimer = null;
 function toast(msg) {
@@ -650,18 +530,3 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('visible'), 10000);
   el.onclick = () => el.classList.remove('visible');
 }
-
-/* ---------- Per-frame rebuild trigger ---------- */
-function rebuildLoop() {
-  requestAnimationFrame(rebuildLoop);
-  if (state.rebuildScheduled) {
-    state.rebuildScheduled = false;
-    if (state.material?.userData.kind === 'solid' && state.material.color) {
-      state.material.color.set(state.params.solidColor);
-    }
-    if (state.uniforms) {
-      // nothing per-frame here — handled in animate()
-    }
-  }
-}
-rebuildLoop();

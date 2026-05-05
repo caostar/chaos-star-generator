@@ -21,9 +21,11 @@ void main() {
   vec3 blend = pow(abs(n), vec3(4.0));
   blend /= max(blend.x + blend.y + blend.z, 0.0001);
 
-  vec2 uvX = vObjectPos.zy * uScale + uOffset;
-  vec2 uvY = vObjectPos.xz * uScale + uOffset;
-  vec2 uvZ = vObjectPos.xy * uScale + uOffset;
+  // World-space triplanar so the texture wraps continuously across all
+  // child meshes (sphere + arrows) of the parametric Group.
+  vec2 uvX = vWorldPos.zy * uScale + uOffset;
+  vec2 uvY = vWorldPos.xz * uScale + uOffset;
+  vec2 uvZ = vWorldPos.xy * uScale + uOffset;
 
   vec3 cx = texture2D(uTex, uvX).rgb;
   vec3 cy = texture2D(uTex, uvY).rgb;

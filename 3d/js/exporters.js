@@ -1,10 +1,17 @@
 // 3D export: STL (binary), GLB, OBJ, 3MF.
+//
+// Runtime uses a Group of unit meshes (parametric, transform-only). For
+// formats where watertightness matters (STL/3MF used by slicers), we run
+// CSG once at export time to produce a single unified BufferGeometry.
+// For visual formats (GLB/OBJ) we export the Group as-is — preserves the
+// scene structure and materials, and avoids the CSG cost.
 
 import * as THREE from 'three';
 import { STLExporter }  from 'three/addons/exporters/STLExporter.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { OBJExporter }  from 'three/addons/exporters/OBJExporter.js';
 import { zipSync, strToU8 } from 'fflate';
+import { buildChaosSphereGeometry } from './sphere-builder.js';
 
 function download(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -13,36 +20,46 @@ function download(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+// Build a watertight unified mesh from current params.
+// Used by STL/3MF (slicer-targeted formats).
+function buildUnifiedMesh(state) {
+  const geometry = buildChaosSphereGeometry(state.params);
+  geometry.scale(state.params.globalScale ?? 1, state.params.globalScale ?? 1, state.params.globalScale ?? 1);
+  return new THREE.Mesh(geometry, state.material);
+}
+
 export async function exportSphere(format, state) {
-  const mesh = state.mesh;
-  if (!mesh) throw new Error('Nothing to export yet');
+  if (!state.chaosphere) throw new Error('Nothing to export yet');
 
   if (format === 'stl') {
+    const mesh = buildUnifiedMesh(state);
     const stl = new STLExporter().parse(mesh, { binary: true });
+    mesh.geometry.dispose();
     download(new Blob([stl], { type: 'model/stl' }), 'chaos-sphere.stl');
     return;
   }
+  if (format === '3mf') {
+    const mesh = buildUnifiedMesh(state);
+    const blob = buildThreeMF(mesh);
+    mesh.geometry.dispose();
+    download(blob, 'chaos-sphere.3mf');
+    return;
+  }
   if (format === 'obj') {
-    const obj = new OBJExporter().parse(mesh);
+    const obj = new OBJExporter().parse(state.chaosphere);
     download(new Blob([obj], { type: 'text/plain' }), 'chaos-sphere.obj');
     return;
   }
   if (format === 'glb') {
     const gltf = await new Promise((resolve, reject) => {
-      new GLTFExporter().parse(mesh, resolve, reject, { binary: true });
+      new GLTFExporter().parse(state.chaosphere, resolve, reject, { binary: true });
     });
     download(new Blob([gltf], { type: 'model/gltf-binary' }), 'chaos-sphere.glb');
-    return;
-  }
-  if (format === '3mf') {
-    download(buildThreeMF(mesh), 'chaos-sphere.3mf');
     return;
   }
   throw new Error(`Unknown format: ${format}`);
 }
 
-// Hand-rolled 3MF writer. 3MF is a zip of XML; for a single mesh + single
-// material this fits in ~100 lines without needing a full library.
 function buildThreeMF(mesh) {
   const geom = mesh.geometry;
   const posAttr = geom.attributes.position;

@@ -54,14 +54,11 @@ function pillsRow(label, options, value, onChange) {
   return row;
 }
 
-// Keys that require re-CSG (geometry rebuild) when changed.
-const SHAPE_KEYS = new Set([
-  'sphereRadius', 'sphereSegments',
-  'shaftRadius', 'shaftLength', 'coneRadius', 'coneLength',
-]);
-
 export function populateShape(container, params, onChange) {
   container.replaceChildren();
+  // All shape params are now live: animate() reads them every frame and the
+  // ChaosphereMesh applies them via cheap mesh.scale / position updates.
+  // No CSG, no debounce, no fade.
   const keys = [
     'globalScale',
     'sphereRadius', 'sphereSegments',
@@ -73,13 +70,7 @@ export function populateShape(container, params, onChange) {
     const def = PARAM_DEFS[k];
     container.appendChild(slider({
       label: humanize(k), min: def.min, max: def.max, step: def.step, value: params[k],
-      onInput: (v) => {
-        const opts = {};
-        if (SHAPE_KEYS.has(k))     opts.shape  = true;
-        if (k === 'globalScale')   opts.scale  = true;
-        if (k === 'rotateSpeed')   opts.live   = true;
-        onChange(k, v, opts);
-      },
+      onInput: (v) => onChange(k, v, { live: true }),
     }));
   }
 }
