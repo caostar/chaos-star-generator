@@ -131,9 +131,46 @@
   margin-bottom: 8px;
 }
 
-/* Native title="" tooltips render fine. Add a subtle help cursor so users
-   notice they can hover for an explanation. */
-.export-btn[title], .has-tooltip[title] { cursor: help; }
+/* Custom instant tooltip — native `title` has a ~1s browser delay we don't want. */
+.tooltip-root {
+  position: fixed;
+  top: 0; left: 0;
+  background: rgba(0, 0, 0, 0.92);
+  border: 1px solid rgba(79, 195, 247, 0.35);
+  color: #d8e6f5;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  max-width: 340px;
+  pointer-events: none;
+  z-index: 100000;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 0.08s ease-out, transform 0.08s ease-out;
+}
+.tooltip-root.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+[data-tooltip] { cursor: help; }
+
+/* Lighting tab sub-section */
+.light-subsection {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+.light-subsection-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 6px;
+}
 
 /* Mode chooser pills */
 .mode-pills {

@@ -28,6 +28,17 @@ const SHORT_KEYS = {
   textureOffsetY:   'ty',
   triplanar:        'tp',
   lighting:         'lg',
+  // Lighting / renderer
+  dirColor:         'lc',
+  dirIntensity:     'li',
+  dirAzimuth:       'la',
+  dirElevation:     'le',
+  hemiSky:          'hk',
+  hemiGround:       'hb',
+  hemiIntensity:    'hi',
+  toneMapping:      'tn',
+  exposure:         'ex',
+  envEnabled:       'ev',
 };
 
 const REVERSE_KEYS = Object.fromEntries(
@@ -88,8 +99,8 @@ export function decodeParams(encoded) {
           const gz = base64decode(value);
           params.shaderSource = strFromU8(gunzipSync(gz));
         } catch { /* ignore corrupt shader */ }
-      } else if (fullKey === 'triplanar') {
-        params.triplanar = !!value;
+      } else if (fullKey === 'triplanar' || fullKey === 'envEnabled') {
+        params[fullKey] = !!value;
       } else {
         params[fullKey] = value;
       }

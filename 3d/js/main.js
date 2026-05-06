@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 import { getDefaults, generateRandomParams, PARAM_DEFS, NUMERIC_KEYS, validateParams } from './parameters.js';
 import { ChaosphereMesh } from './chaosphere-mesh.js';
@@ -48,6 +49,7 @@ init();
 
 async function init() {
   installShaderErrorCapture();
+  installTooltips();
   state.params = loadFromUrl() || generateRandomParams();
 
   setupRenderer();
@@ -191,14 +193,65 @@ async function loadActiveTexture() {
 
 /* ---------- Lights / OrbitControls --------------------------------------- */
 
+const TONE_MAP_MODES = {
+  none:     THREE.NoToneMapping,
+  linear:   THREE.LinearToneMapping,
+  reinhard: THREE.ReinhardToneMapping,
+  cineon:   THREE.CineonToneMapping,
+  aces:     THREE.ACESFilmicToneMapping,
+  agx:      THREE.AgXToneMapping ?? THREE.ACESFilmicToneMapping,
+};
+
 function setupLights() {
-  const grp = new THREE.Group();
-  grp.add(new THREE.HemisphereLight(0xffffff, 0x222244, 0.85));
-  const dir = new THREE.DirectionalLight(0xffffff, 1.0);
-  dir.position.set(60, 80, 100);
-  grp.add(dir);
-  state.scene.add(grp);
-  state.lights = grp;
+  state.lights = {
+    hemi: new THREE.HemisphereLight(0xffffff, 0x222244, 0.85),
+    dir:  new THREE.DirectionalLight(0xffffff, 1.0),
+  };
+  state.scene.add(state.lights.hemi);
+  state.scene.add(state.lights.dir);
+}
+
+let envTexture = null;
+function ensureEnv() {
+  if (envTexture) return envTexture;
+  const pmrem = new THREE.PMREMGenerator(state.renderer);
+  pmrem.compileEquirectangularShader();
+  envTexture = pmrem.fromScene(new RoomEnvironment(state.renderer), 0.04).texture;
+  pmrem.dispose();
+  return envTexture;
+}
+
+// Apply lighting / renderer params each frame. All cheap.
+function applyLightingState() {
+  const p = state.params;
+  const d = state.lights.dir;
+  d.color.set(p.dirColor);
+  d.intensity = p.dirIntensity;
+  const az = THREE.MathUtils.degToRad(p.dirAzimuth);
+  const el = THREE.MathUtils.degToRad(p.dirElevation);
+  d.position.set(
+    Math.cos(el) * Math.sin(az),
+    Math.sin(el),
+    Math.cos(el) * Math.cos(az),
+  ).multiplyScalar(200);
+
+  const h = state.lights.hemi;
+  h.color.set(p.hemiSky);
+  h.groundColor.set(p.hemiGround);
+  h.intensity = p.hemiIntensity;
+
+  state.renderer.toneMappingExposure = p.exposure;
+  const tm = TONE_MAP_MODES[p.toneMapping] ?? THREE.ACESFilmicToneMapping;
+  if (state.renderer.toneMapping !== tm) {
+    state.renderer.toneMapping = tm;
+    if (state.material) state.material.needsUpdate = true;
+  }
+
+  const envWanted = !!p.envEnabled;
+  const hasEnv = !!state.scene.environment;
+  if (envWanted !== hasEnv) {
+    state.scene.environment = envWanted ? ensureEnv() : null;
+  }
 }
 
 function setupControls() {
@@ -221,9 +274,9 @@ function setupControls() {
 function animate() {
   requestAnimationFrame(animate);
   const t = (performance.now() - state.startTs) / 1000;
-  // Cheap parametric update: sets scales and positions only.
   state.chaosphere.update(state.params);
   state.chaosphere.scale.setScalar(state.params.globalScale ?? 1);
+  applyLightingState();
 
   if (state.uniforms?.iTime) {
     state.uniforms.iTime.value = t;
@@ -231,6 +284,8 @@ function animate() {
   }
   state.controls.autoRotateSpeed = state.params.rotateSpeed;
   state.controls.update();
+  // Reset clear color/alpha to live values every frame; PNG export sets a
+  // one-shot override and does NOT depend on this since it renders inline.
   state.renderer.setClearColor(state.params.backgroundColor || '#000000', 1);
   state.renderer.render(state.scene, state.camera);
 }
@@ -403,11 +458,17 @@ function refreshUI() {
 
 function exportPng(transparent) {
   const renderer = state.renderer;
-  const prevAlpha = renderer.getClearAlpha();
-  if (transparent) renderer.setClearAlpha(0);
-  // Force a fresh render so toBlob captures the latest frame
+  // Render synchronously with the chosen alpha. preserveDrawingBuffer keeps
+  // these pixels alive until toBlob's async callback fires.
+  if (transparent) {
+    renderer.setClearColor(0x000000, 0);
+  } else {
+    renderer.setClearColor(state.params.backgroundColor || '#000000', 1);
+  }
   renderer.render(state.scene, state.camera);
   renderer.domElement.toBlob((blob) => {
+    // Restore live clear settings; animate() also resets them next frame.
+    renderer.setClearColor(state.params.backgroundColor || '#000000', 1);
     if (!blob) { toast('PNG export failed'); return; }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -415,7 +476,6 @@ function exportPng(transparent) {
     setTimeout(() => URL.revokeObjectURL(url), 4000);
     toast('Exported chaos-sphere.png');
   }, 'image/png');
-  if (transparent) renderer.setClearAlpha(prevAlpha);
 }
 
 async function onParamChange(key, value, opts = {}) {
@@ -554,6 +614,49 @@ function toggleFullscreen() {
 }
 function toggleControls() {
   document.body.classList.toggle('controls-hidden');
+}
+
+/* ---------- Custom instant tooltip ------------------------------------- */
+
+function installTooltips() {
+  const root = document.createElement('div');
+  root.className = 'tooltip-root';
+  document.body.appendChild(root);
+  let active = null;
+
+  function place(el) {
+    const r = el.getBoundingClientRect();
+    let x = Math.max(8, r.left);
+    let y = r.bottom + 8;
+    const tw = root.offsetWidth, th = root.offsetHeight;
+    if (x + tw > window.innerWidth - 8)  x = window.innerWidth - tw - 8;
+    if (y + th > window.innerHeight - 8) y = Math.max(8, r.top - th - 8);
+    root.style.left = `${x}px`;
+    root.style.top  = `${y}px`;
+  }
+  function show(el) {
+    if (active === el) return;
+    active = el;
+    root.textContent = el.getAttribute('data-tooltip');
+    root.classList.add('visible');
+    requestAnimationFrame(() => place(el));
+  }
+  function hide() {
+    active = null;
+    root.classList.remove('visible');
+  }
+  document.addEventListener('mouseover', (e) => {
+    const el = e.target?.closest?.('[data-tooltip]');
+    if (el) show(el); else hide();
+  }, true);
+  document.addEventListener('mouseleave', hide, true);
+  document.addEventListener('scroll',     hide, true);
+  // Touch / focus accessibility
+  document.addEventListener('focusin', (e) => {
+    const el = e.target?.closest?.('[data-tooltip]');
+    if (el) show(el);
+  });
+  document.addEventListener('focusout', hide);
 }
 
 /* ---------- Toast ------------------------------------------------------- */

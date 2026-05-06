@@ -1,6 +1,6 @@
 // UI populators — one function per tab content panel.
 
-import { PARAM_DEFS } from './parameters.js';
+import { PARAM_DEFS, TONE_MAPPING_IDS } from './parameters.js';
 import { listBuiltins, shaderLabel, loadBuiltin } from './shader-manager.js';
 import { SAMPLE_TEXTURES, sampleUrl, hasCustom } from './texture-manager-3d.js';
 
@@ -224,6 +224,30 @@ export function populateShader(container, params, onShaderChange, onImportUrl) {
   container.appendChild(err);
 }
 
+function subSection(title) {
+  const w = el('div', 'light-subsection');
+  w.appendChild(el('div', 'light-subsection-title', title));
+  return w;
+}
+
+function selectRow(label, options, value, onChange) {
+  const row = el('div', 'cs-row');
+  row.appendChild(el('div', 'cs-label', label));
+  const wrap = el('div', 'cs-slider-wrap');
+  const sel = document.createElement('select');
+  sel.style.cssText = 'flex:1; background:rgba(0,0,0,0.5); color:#d8e6f5; border:1px solid rgba(255,255,255,0.1); border-radius:3px; font-family:inherit; font-size:11px; padding:3px 6px;';
+  for (const opt of options) {
+    const o = document.createElement('option');
+    o.value = opt.value; o.textContent = opt.label;
+    if (opt.value === value) o.selected = true;
+    sel.appendChild(o);
+  }
+  sel.addEventListener('change', () => onChange(sel.value));
+  wrap.appendChild(sel);
+  row.appendChild(wrap);
+  return row;
+}
+
 export function populateLighting(container, params, onChange) {
   container.replaceChildren();
   container.appendChild(pillsRow('Mode', [
@@ -235,7 +259,7 @@ export function populateLighting(container, params, onChange) {
   if (params.materialMode === 'shader' && params.lighting !== 'wireframe') {
     const note = el('div');
     note.style.cssText = 'font-size:10px; color:rgba(255,255,255,0.45); margin:6px 0 12px; line-height:1.4;';
-    note.textContent = 'Shader mode bakes its own lighting — Shaded/Flat have no effect. Wireframe always works.';
+    note.textContent = 'Shader mode bakes its own lighting — most controls below only affect Texture and Solid modes. Camera distance, exposure, tone mapping, and environment work everywhere.';
     container.appendChild(note);
   }
 
@@ -245,6 +269,65 @@ export function populateLighting(container, params, onChange) {
     step: PARAM_DEFS.cameraDistance.step, value: params.cameraDistance,
     onInput: (v) => onChange('cameraDistance', v, { camera: true }),
   }));
+
+  // ---- Directional light
+  const dir = subSection('Directional Light (sun)');
+  dir.appendChild(colorRow('Color',
+    params.dirColor, (v) => onChange('dirColor', v, { live: true })));
+  dir.appendChild(slider({
+    label: 'Intensity', min: PARAM_DEFS.dirIntensity.min, max: PARAM_DEFS.dirIntensity.max,
+    step: PARAM_DEFS.dirIntensity.step, value: params.dirIntensity,
+    onInput: (v) => onChange('dirIntensity', v, { live: true }),
+  }));
+  dir.appendChild(slider({
+    label: 'Azimuth (°)', min: PARAM_DEFS.dirAzimuth.min, max: PARAM_DEFS.dirAzimuth.max,
+    step: PARAM_DEFS.dirAzimuth.step, value: params.dirAzimuth,
+    onInput: (v) => onChange('dirAzimuth', v, { live: true }),
+  }));
+  dir.appendChild(slider({
+    label: 'Elevation (°)', min: PARAM_DEFS.dirElevation.min, max: PARAM_DEFS.dirElevation.max,
+    step: PARAM_DEFS.dirElevation.step, value: params.dirElevation,
+    onInput: (v) => onChange('dirElevation', v, { live: true }),
+  }));
+  container.appendChild(dir);
+
+  // ---- Hemisphere light
+  const hemi = subSection('Ambient (sky / ground)');
+  hemi.appendChild(colorRow('Sky',
+    params.hemiSky, (v) => onChange('hemiSky', v, { live: true })));
+  hemi.appendChild(colorRow('Ground',
+    params.hemiGround, (v) => onChange('hemiGround', v, { live: true })));
+  hemi.appendChild(slider({
+    label: 'Intensity', min: PARAM_DEFS.hemiIntensity.min, max: PARAM_DEFS.hemiIntensity.max,
+    step: PARAM_DEFS.hemiIntensity.step, value: params.hemiIntensity,
+    onInput: (v) => onChange('hemiIntensity', v, { live: true }),
+  }));
+  container.appendChild(hemi);
+
+  // ---- Renderer / global look
+  const ren = subSection('Renderer');
+  ren.appendChild(selectRow('Tone mapping',
+    TONE_MAPPING_IDS.map(id => ({ value: id, label: id.toUpperCase() })),
+    params.toneMapping, (v) => onChange('toneMapping', v, { live: true })));
+  ren.appendChild(slider({
+    label: 'Exposure', min: PARAM_DEFS.exposure.min, max: PARAM_DEFS.exposure.max,
+    step: PARAM_DEFS.exposure.step, value: params.exposure,
+    onInput: (v) => onChange('exposure', v, { live: true }),
+  }));
+
+  const envRow = el('label', 'cs-toggle-wrap');
+  envRow.style.cssText = 'gap:8px; margin-top:8px;';
+  envRow.setAttribute('data-tooltip',
+    'Adds a procedural Three.js Room environment map.\nMakes metallic / glossy materials reflect a soft studio scene — much fancier highlights.\nNo external HDR file needed.');
+  const envCb = el('input');
+  envCb.type = 'checkbox'; envCb.className = 'cs-toggle';
+  envCb.checked = !!params.envEnabled;
+  envCb.addEventListener('change', () => onChange('envEnabled', envCb.checked, { live: true }));
+  envRow.append(envCb, el('span', 'cs-toggle-indicator'),
+    el('span', '', 'Environment reflections'));
+  ren.appendChild(envRow);
+
+  container.appendChild(ren);
 }
 
 function humanize(key) {
@@ -331,7 +414,7 @@ export function populateActions(container, params, ctx) {
 
   const matRow = el('label', 'cs-toggle-wrap');
   matRow.style.cssText = 'gap:8px; margin-top:6px;';
-  matRow.title = 'When off, only the shape randomizes — your current shader / texture / colour stays put.';
+  matRow.setAttribute('data-tooltip', 'When OFF, only the shape randomizes — your current shader / texture / colour stays put.');
   const matCb = el('input');
   matCb.type = 'checkbox'; matCb.className = 'cs-toggle';
   matCb.checked = ctx.inspireMaterialToo;
@@ -355,7 +438,7 @@ export function populateActions(container, params, ctx) {
     const btn = el('button', 'cp-btn export-btn');
     btn.dataset.fmt = fmt;
     btn.textContent = `↓ ${info.label}${info.forPrinting ? ' ⚙' : ''}`;
-    btn.title = info.tooltip;
+    btn.setAttribute('data-tooltip', info.tooltip);
     btn.addEventListener('click', () => ctx.onExport3D(fmt));
     grid.appendChild(btn);
   }
@@ -370,7 +453,8 @@ export function populateActions(container, params, ctx) {
   const exImg = section('Export Image');
   const transparentRow = el('label', 'cs-toggle-wrap');
   transparentRow.style.cssText = 'gap:8px; margin-bottom:8px;';
-  transparentRow.title = 'On = transparent PNG (no background colour). Off = include the current background.';
+  transparentRow.setAttribute('data-tooltip',
+    'ON  = transparent PNG (no background colour, alpha channel preserved).\nOFF = include the current background colour as opaque pixels.');
   const transCb = el('input');
   transCb.type = 'checkbox'; transCb.className = 'cs-toggle';
   transCb.checked = !!ctx.imageTransparent;
@@ -382,8 +466,11 @@ export function populateActions(container, params, ctx) {
   const pngBtn = el('button', 'cp-btn');
   pngBtn.style.width = '100%';
   pngBtn.textContent = '↓ Save PNG';
-  pngBtn.title = 'PNG screenshot of the current canvas at native resolution. Optional alpha channel.';
-  pngBtn.addEventListener('click', () => ctx.onExportImage({ transparent: !!ctx.imageTransparent }));
+  pngBtn.setAttribute('data-tooltip',
+    'Capture the current canvas as a PNG at native resolution.\nThe transparent toggle above controls whether the background is preserved.');
+  // Read the live checkbox state at click time — fixes a snapshot bug where
+  // toggling didn't take effect until UI was refreshed.
+  pngBtn.addEventListener('click', () => ctx.onExportImage({ transparent: transCb.checked }));
   exImg.appendChild(pngBtn);
   container.appendChild(exImg);
 

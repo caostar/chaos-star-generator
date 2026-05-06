@@ -18,7 +18,16 @@ export const PARAM_DEFS = {
   textureScale:   { key: 'ts', min: 0.1,  max: 5,    step: 0.05, default: 1     },
   metalness:      { key: 'mt', min: 0,    max: 1,    step: 0.05, default: 0.5   },
   roughness:      { key: 'rg', min: 0,    max: 1,    step: 0.05, default: 0.4   },
+  // ---- Lighting (numeric)
+  dirIntensity:   { key: 'li', min: 0,    max: 3,    step: 0.05, default: 1.0   },
+  dirAzimuth:     { key: 'la', min: 0,    max: 360,  step: 1,    default: 50    },
+  dirElevation:   { key: 'le', min: -90,  max: 90,   step: 1,    default: 45    },
+  hemiIntensity:  { key: 'hi', min: 0,    max: 2,    step: 0.05, default: 0.85  },
+  exposure:       { key: 'ex', min: 0.3,  max: 2,    step: 0.05, default: 1.0   },
 };
+
+// Tone mapping options exposed to the URL / UI (resolved to THREE constants in main.js)
+export const TONE_MAPPING_IDS = ['none', 'linear', 'reinhard', 'cineon', 'aces', 'agx'];
 
 // Which params are numeric (live-tweenable). Anything in PARAM_DEFS is numeric.
 export const NUMERIC_KEYS = Object.keys(PARAM_DEFS);
@@ -41,6 +50,11 @@ export function getDefaults() {
   p.textureOffsetY  = 0;
   p.triplanar       = false;
   p.lighting        = 'shaded';   // 'shaded' | 'flat' | 'wireframe'
+  p.dirColor        = '#ffffff';
+  p.hemiSky         = '#ffffff';
+  p.hemiGround      = '#222244';
+  p.toneMapping     = 'aces';
+  p.envEnabled      = false;
   return p;
 }
 
@@ -59,11 +73,13 @@ export function validateParams(input) {
   for (const k of [
     'backgroundColor', 'solidColor', 'materialMode', 'shaderId',
     'shaderSource', 'textureMode', 'lighting',
+    'dirColor', 'hemiSky', 'hemiGround', 'toneMapping',
   ]) if (typeof input[k] === 'string') p[k] = input[k];
   for (const k of ['textureIndex', 'textureOffsetX', 'textureOffsetY']) {
     if (typeof input[k] === 'number') p[k] = input[k];
   }
-  if (typeof input.triplanar === 'boolean') p.triplanar = input.triplanar;
+  if (typeof input.triplanar === 'boolean')  p.triplanar  = input.triplanar;
+  if (typeof input.envEnabled === 'boolean') p.envEnabled = input.envEnabled;
   return p;
 }
 
