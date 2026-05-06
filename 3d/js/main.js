@@ -12,7 +12,7 @@ import {
 import { Tweener } from './animation.js';
 import { syncUrl, loadFromUrl, endSession, buildShareUrl, SHADER_SOURCE_MAX } from './url-codec-3d.js';
 import { exportSphere } from './exporters.js';
-import { populateShape, populateMaterial, populateShader, populateLighting } from './ui.js';
+import { populateShape, populateMaterial, populateShader, populateLighting, populateActions } from './ui.js';
 
 const state = {
   params: getDefaults(),
@@ -26,9 +26,19 @@ const state = {
   lights:   null,
   inspireActive: false,
   inspireTimer:  null,
+  inspireMaterialToo: false,
+  imageTransparent: true,
   speedMs: 1700,
   startTs: performance.now(),
 };
+
+// Material-related fields (preserved by Inspire when "Material too" is OFF)
+const MATERIAL_KEYS = [
+  'materialMode', 'shaderId', 'shaderSource', 'solidColor',
+  'metalness', 'roughness',
+  'textureMode', 'textureIndex', 'textureOffsetX', 'textureOffsetY',
+  'textureScale', 'triplanar', 'lighting', 'backgroundColor',
+];
 
 window.__chaosphere = state;
 window.__rebuildMaterial = async () => rebuildMaterial();
@@ -55,7 +65,10 @@ async function init() {
 
 function setupRenderer() {
   const canvas = document.getElementById('sphereCanvas');
-  state.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  state.renderer = new THREE.WebGLRenderer({
+    canvas, antialias: true, alpha: true,
+    preserveDrawingBuffer: true, // needed for PNG export via toBlob
+  });
   state.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   state.renderer.setSize(window.innerWidth, window.innerHeight, false);
   state.renderer.setClearColor(state.params.backgroundColor || '#000000', 1);
@@ -280,7 +293,12 @@ function scheduleNextInspire(delay = state.speedMs) {
   if (!state.inspireActive) return;
   state.inspireTimer = setTimeout(async () => {
     if (!state.inspireActive) return;
-    await transitionTo(generateRandomParams(), state.speedMs, 'push');
+    const next = generateRandomParams();
+    if (!state.inspireMaterialToo) {
+      // Preserve current material so only the shape randomizes
+      for (const k of MATERIAL_KEYS) next[k] = state.params[k];
+    }
+    await transitionTo(next, state.speedMs, 'push');
     scheduleNextInspire();
   }, delay);
 }
@@ -351,31 +369,7 @@ function setupUI() {
     cpBody.style.display = cpBody.style.display === 'none' ? '' : 'none';
   });
 
-  refreshUI();
-
-  document.getElementById('reRandom')?.addEventListener('click', () => {
-    if (state.inspireActive) stopInspire(); else startInspire();
-  });
-  const speedSlider = document.getElementById('speedSlider');
-  const speedVal = document.getElementById('speedVal');
-  speedSlider?.addEventListener('input', () => {
-    state.speedMs = +speedSlider.value;
-    speedVal.textContent = speedSlider.value;
-  });
-
-  document.querySelectorAll('.export-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      toast(`Preparing ${btn.dataset.fmt.toUpperCase()}…`);
-      exportSphere(btn.dataset.fmt, state)
-        .then(() => toast(`Exported chaos-sphere.${btn.dataset.fmt}`))
-        .catch(err => toast(err.message));
-    });
-  });
-  document.getElementById('copyUrlBtn')?.addEventListener('click', () => {
-    const url = buildShareUrl(state.params);
-    navigator.clipboard?.writeText(url).then(() => toast('Share URL copied'));
-  });
-  document.getElementById('goFullScreen')?.addEventListener('click', toggleFullscreen);
+  refreshUI(); // Actions tab buttons are wired here (populateActions)
 }
 
 function refreshUI() {
@@ -383,6 +377,45 @@ function refreshUI() {
   populateMaterial(document.getElementById('tabMaterial'), state.params, onParamChange, onTextureUpload);
   populateShader(document.getElementById('tabShader'), state.params, onShaderChange, onShaderToyImport);
   populateLighting(document.getElementById('tabLighting'), state.params, onParamChange);
+  populateActions(document.getElementById('tabActions'), state.params, {
+    getInspireActive: () => state.inspireActive,
+    toggleInspire:    () => { state.inspireActive ? stopInspire() : startInspire(); },
+    speedMs:          state.speedMs,
+    setSpeedMs:       (v) => { state.speedMs = v; },
+    inspireMaterialToo: state.inspireMaterialToo,
+    setInspireMaterialToo: (v) => { state.inspireMaterialToo = v; },
+    imageTransparent: state.imageTransparent,
+    setImageTransparent: (v) => { state.imageTransparent = v; },
+    onExport3D:       (fmt) => {
+      toast(`Preparing ${fmt.toUpperCase()}…`);
+      exportSphere(fmt, state)
+        .then(() => toast(`Exported chaos-sphere.${fmt}`))
+        .catch(err => toast(err.message));
+    },
+    onExportImage:    ({ transparent }) => exportPng(transparent),
+    onCopyUrl:        () => {
+      const url = buildShareUrl(state.params);
+      navigator.clipboard?.writeText(url).then(() => toast('Share URL copied'));
+    },
+    onFullscreen:     toggleFullscreen,
+  });
+}
+
+function exportPng(transparent) {
+  const renderer = state.renderer;
+  const prevAlpha = renderer.getClearAlpha();
+  if (transparent) renderer.setClearAlpha(0);
+  // Force a fresh render so toBlob captures the latest frame
+  renderer.render(state.scene, state.camera);
+  renderer.domElement.toBlob((blob) => {
+    if (!blob) { toast('PNG export failed'); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'chaos-sphere.png'; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    toast('Exported chaos-sphere.png');
+  }, 'image/png');
+  if (transparent) renderer.setClearAlpha(prevAlpha);
 }
 
 async function onParamChange(key, value, opts = {}) {
@@ -408,7 +441,10 @@ async function onParamChange(key, value, opts = {}) {
   if (['materialMode', 'textureMode', 'lighting', 'triplanar'].includes(key)) {
     refreshUI();
   }
-  syncUrlSoon();
+  // Discrete material/mode flips are share-worthy → push immediately.
+  // Numeric live updates stay debounced.
+  const pushNow = ['materialMode', 'textureMode', 'lighting', 'triplanar', 'textureIndex'].includes(key);
+  syncUrlSoon(pushNow ? 'push' : 'auto');
 }
 
 function liveUpdateParam(key, value) {
@@ -431,7 +467,9 @@ async function onShaderChange(shaderId, source) {
   state.params.shaderSource = shaderId === 'custom' ? source : null;
   state.params.materialMode = 'shader';
   await rebuildMaterial();
-  syncUrlSoon();
+  // Push immediately so back/forward steps through shader changes and the
+  // URL is share-ready right away (no 1s debounce).
+  syncUrlSoon('push');
 }
 async function onShaderToyImport(url) {
   try {

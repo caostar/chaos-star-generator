@@ -1,21 +1,29 @@
-// Shader registry: built-in fragments + ShaderToy adapter.
+// =============================================================================
+//  ADD A NEW BUILT-IN SHADER
+// -----------------------------------------------------------------------------
+//  1. Drop your fragment shader into  3d/shaders/builtin/<id>.frag
+//  2. Add one row to the array below.  That's it — it appears in the dropdown
+//     and the random-inspire pool automatically.
+//
+//  Each .frag file should define `void mainImage(out vec4 fragColor, in vec2
+//  fragCoord)`. The wrapper provides iTime / iResolution / iMouse / iChannel0
+//  uniforms and vUv / vNormal / vWorldPos / vObjectPos varyings.
+// =============================================================================
 
-const BUILTIN_IDS = [
-  'iridescent', 'plasma', 'voronoi', 'psychedelic',
-  'matrix', 'lava', 'crystalline', 'starfield',
+export const BUILTIN_SHADERS = [
+  { id: 'iridescent',  label: 'Iridescent'  },
+  { id: 'plasma',      label: 'Plasma'      },
+  { id: 'voronoi',     label: 'Voronoi'     },
+  { id: 'psychedelic', label: 'Psychedelic' },
+  { id: 'matrix',      label: 'Matrix'      },
+  { id: 'lava',        label: 'Lava'        },
+  { id: 'crystalline', label: 'Crystalline' },
+  { id: 'starfield',   label: 'Starfield'   },
 ];
 
-const SHADER_LABELS = {
-  iridescent: 'Iridescent',
-  plasma:     'Plasma',
-  voronoi:    'Voronoi',
-  psychedelic:'Psychedelic',
-  matrix:     'Matrix',
-  lava:       'Lava',
-  crystalline:'Crystalline',
-  starfield:  'Starfield',
-  custom:     'Custom…',
-};
+const BUILTIN_IDS = BUILTIN_SHADERS.map(s => s.id);
+const SHADER_LABELS = Object.fromEntries(BUILTIN_SHADERS.map(s => [s.id, s.label]));
+SHADER_LABELS.custom = 'Custom…';
 
 const cache = { vertex: null, wrapper: null, builtins: {} };
 
@@ -51,8 +59,9 @@ export async function loadBuiltin(id) {
 }
 
 export function listBuiltins() {
-  return BUILTIN_IDS.map(id => ({ id, label: SHADER_LABELS[id] }));
+  return BUILTIN_SHADERS.slice();
 }
+export function builtinIds() { return BUILTIN_IDS.slice(); }
 
 export function shaderLabel(id) {
   return SHADER_LABELS[id] || id;

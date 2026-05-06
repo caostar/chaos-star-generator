@@ -71,10 +71,7 @@ export function validateParams(input) {
 //  Random generator — biased toward visually-balanced designs
 // =============================================================================
 
-const BUILTIN_SHADERS = [
-  'iridescent', 'plasma', 'voronoi', 'psychedelic',
-  'matrix', 'lava', 'crystalline', 'starfield',
-];
+import { BUILTIN_SHADERS } from './shader-manager.js';
 
 function rand(min, max) { return min + Math.random() * (max - min); }
 function pick(arr)      { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -92,7 +89,7 @@ export function generateRandomParams() {
   const r = Math.random();
   if (r < 0.65) {
     p.materialMode = 'shader';
-    p.shaderId     = pick(BUILTIN_SHADERS);
+    p.shaderId     = pick(BUILTIN_SHADERS).id;
   } else if (r < 0.85) {
     p.materialMode = 'solid';
     const h = Math.random() * 360, s = 60 + Math.random() * 30, l = 45 + Math.random() * 20;

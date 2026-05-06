@@ -112,6 +112,29 @@
 .tex-tile:hover    { filter: brightness(1.2); }
 .tex-tile.selected { border-color: #4fc3f7; }
 
+/* Actions tab section headers */
+.actions-section {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.actions-section:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.actions-section-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(79, 195, 247, 0.7);
+  margin-bottom: 8px;
+}
+
+/* Native title="" tooltips render fine. Add a subtle help cursor so users
+   notice they can hover for an explanation. */
+.export-btn[title], .has-tooltip[title] { cursor: help; }
+
 /* Mode chooser pills */
 .mode-pills {
   display: flex;

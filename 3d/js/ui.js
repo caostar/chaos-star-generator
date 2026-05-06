@@ -250,3 +250,157 @@ export function populateLighting(container, params, onChange) {
 function humanize(key) {
   return key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
 }
+
+// =============================================================================
+//  Actions tab — Inspire / Export 3D / Export Image / Share & Window
+// =============================================================================
+
+const FORMAT_INFO = {
+  stl: {
+    label: 'STL',
+    forPrinting: true,
+    tooltip:
+      'STL — Standard Tessellation Language\n\n' +
+      'The de-facto standard for 3D printing. Pure triangles, no color, no materials.\n' +
+      'Watertight: CSG-unioned before export so slicers see one solid body.\n\n' +
+      'Opens in: PrusaSlicer, Bambu Studio, Cura, OrcaSlicer, Blender, MeshMixer.\n' +
+      'Best for: 3D printing — your safest bet.\n' +
+      'Trade-off: no color or texture data.',
+  },
+  '3mf': {
+    label: '3MF',
+    forPrinting: true,
+    tooltip:
+      '3MF — 3D Manufacturing Format\n\n' +
+      "STL's modern successor. Supports color, multiple materials, units, " +
+      'metadata. Watertight via CSG before export.\n\n' +
+      'Opens in: PrusaSlicer, Bambu Studio, Microsoft 3D Builder, Blender.\n' +
+      'Best for: color 3D printing — recommended over STL on a multi-material printer.',
+  },
+  glb: {
+    label: 'GLB',
+    forPrinting: false,
+    tooltip:
+      'GLB — Binary glTF 2.0\n\n' +
+      'Modern web/AR/realtime format. Preserves materials, textures, scene graph.\n' +
+      'Exports the parametric Group as-is (8 arrows + sphere) — not watertight.\n\n' +
+      'Opens in: gltf-viewer.donmccurdy.com, Blender, Three.js apps, Unreal, Unity, model-viewer.\n' +
+      'Best for: sharing online or embedding in a 3D scene.\n' +
+      'Not great for 3D printing — most slicers reject it or mis-handle the meshes.',
+  },
+  obj: {
+    label: 'OBJ',
+    forPrinting: false,
+    tooltip:
+      'OBJ — Wavefront\n\n' +
+      'Plain-text universal mesh format from the early 90s. No embedded materials\n' +
+      "in this export. Larger files than GLB. Exports the Group as-is — not watertight.\n\n" +
+      'Opens in: Blender, Maya, 3ds Max, MeshLab, virtually any 3D software.\n' +
+      'Best for: archival, hand-editing in older tools.\n' +
+      'Some slicers accept it for 3D printing, but STL/3MF are safer.',
+  },
+};
+
+function section(title) {
+  const wrap = el('div', 'actions-section');
+  wrap.appendChild(el('div', 'actions-section-title', title));
+  return wrap;
+}
+
+export function populateActions(container, params, ctx) {
+  // ctx provides: getInspireActive, toggleInspire, speedMs, setSpeedMs,
+  //   inspireMaterialToo, setInspireMaterialToo,
+  //   onExport3D(format), onExportImage({ transparent }), onCopyUrl, onFullscreen
+  container.replaceChildren();
+
+  // --- Inspire section
+  const inspire = section('Inspire');
+  const inspBtn = el('button', 'cp-btn cp-btn-start', '⟳ Inspire me randomly');
+  inspBtn.id = 'reRandom';
+  if (ctx.getInspireActive()) inspBtn.classList.add('active');
+  inspBtn.addEventListener('click', () => {
+    ctx.toggleInspire();
+    inspBtn.classList.toggle('active', ctx.getInspireActive());
+  });
+  inspire.appendChild(inspBtn);
+
+  inspire.appendChild(slider({
+    label: 'Transition (ms)', min: 100, max: 3000, step: 50, value: ctx.speedMs,
+    onInput: (v) => ctx.setSpeedMs(v),
+  }));
+
+  const matRow = el('label', 'cs-toggle-wrap');
+  matRow.style.cssText = 'gap:8px; margin-top:6px;';
+  matRow.title = 'When off, only the shape randomizes — your current shader / texture / colour stays put.';
+  const matCb = el('input');
+  matCb.type = 'checkbox'; matCb.className = 'cs-toggle';
+  matCb.checked = ctx.inspireMaterialToo;
+  matCb.addEventListener('change', () => ctx.setInspireMaterialToo(matCb.checked));
+  matRow.append(matCb, el('span', 'cs-toggle-indicator'),
+    el('span', '', 'Material too'));
+  inspire.appendChild(matRow);
+
+  container.appendChild(inspire);
+
+  // --- Export 3D section
+  const ex3d = section('Export 3D');
+  const intro = el('div');
+  intro.style.cssText = 'font-size:10px; color:rgba(255,255,255,0.45); margin-bottom:6px; line-height:1.4;';
+  intro.textContent = 'Hover a button for what each format is, what opens it, and whether it prints well.';
+  ex3d.appendChild(intro);
+
+  const grid = el('div', 'export-grid');
+  for (const fmt of ['stl', '3mf', 'glb', 'obj']) {
+    const info = FORMAT_INFO[fmt];
+    const btn = el('button', 'cp-btn export-btn');
+    btn.dataset.fmt = fmt;
+    btn.textContent = `↓ ${info.label}${info.forPrinting ? ' ⚙' : ''}`;
+    btn.title = info.tooltip;
+    btn.addEventListener('click', () => ctx.onExport3D(fmt));
+    grid.appendChild(btn);
+  }
+  ex3d.appendChild(grid);
+  const printNote = el('div');
+  printNote.style.cssText = 'font-size:9px; color:rgba(255,255,255,0.35); margin-top:6px;';
+  printNote.textContent = '⚙ = slicer-ready (watertight CSG union)';
+  ex3d.appendChild(printNote);
+  container.appendChild(ex3d);
+
+  // --- Export Image section
+  const exImg = section('Export Image');
+  const transparentRow = el('label', 'cs-toggle-wrap');
+  transparentRow.style.cssText = 'gap:8px; margin-bottom:8px;';
+  transparentRow.title = 'On = transparent PNG (no background colour). Off = include the current background.';
+  const transCb = el('input');
+  transCb.type = 'checkbox'; transCb.className = 'cs-toggle';
+  transCb.checked = !!ctx.imageTransparent;
+  transCb.addEventListener('change', () => ctx.setImageTransparent(transCb.checked));
+  transparentRow.append(transCb, el('span', 'cs-toggle-indicator'),
+    el('span', '', 'Transparent background'));
+  exImg.appendChild(transparentRow);
+
+  const pngBtn = el('button', 'cp-btn');
+  pngBtn.style.width = '100%';
+  pngBtn.textContent = '↓ Save PNG';
+  pngBtn.title = 'PNG screenshot of the current canvas at native resolution. Optional alpha channel.';
+  pngBtn.addEventListener('click', () => ctx.onExportImage({ transparent: !!ctx.imageTransparent }));
+  exImg.appendChild(pngBtn);
+  container.appendChild(exImg);
+
+  // --- Share / Window section
+  const share = section('Share & Window');
+  const copyBtn = el('button', 'cp-btn');
+  copyBtn.id = 'copyUrlBtn';
+  copyBtn.style.cssText = 'width:100%; margin-bottom:6px;';
+  copyBtn.textContent = '⌘ Copy share URL';
+  copyBtn.addEventListener('click', () => ctx.onCopyUrl());
+  share.appendChild(copyBtn);
+
+  const fsBtn = el('button', 'cp-btn hiddenOnMobile');
+  fsBtn.id = 'goFullScreen';
+  fsBtn.style.width = '100%';
+  fsBtn.textContent = '⛶ Full screen';
+  fsBtn.addEventListener('click', () => ctx.onFullscreen());
+  share.appendChild(fsBtn);
+  container.appendChild(share);
+}
